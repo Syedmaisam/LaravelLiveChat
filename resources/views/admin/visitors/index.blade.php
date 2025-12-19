@@ -59,19 +59,62 @@
                             {{ strtoupper(substr($session->visitor->name ?? 'A', 0, 1)) }}
                         </div>
                         <div>
-                            <div class="font-medium text-sm text-white">{{ $session->visitor->name ?? 'Anonymous' }}</div>
-                            <div class="text-xs text-gray-500">{{ $session->visitor->city ?? 'Unknown' }}, {{ $session->visitor->country ?? '' }}</div>
+                            <div class="font-medium text-sm text-white flex items-center gap-2">
+                                {{ $session->visitor->name ?? 'Anonymous' }}
+                                @if($session->visitor->country_code)
+                                <img src="https://flagcdn.com/16x12/{{ strtolower($session->visitor->country_code) }}.png" 
+                                     alt="{{ $session->visitor->country }}" 
+                                     title="{{ $session->visitor->country }}"
+                                     class="inline-block">
+                                @endif
+                            </div>
+                            <div class="text-xs text-gray-500 flex items-center gap-2">
+                                <span>{{ $session->visitor->city ?? 'Unknown' }}, {{ $session->visitor->country ?? '' }}</span>
+                                @if($session->visitor->os)
+                                <span class="text-gray-600">•</span>
+                                <span title="{{ $session->visitor->os }}">
+                                    @if(str_contains($session->visitor->os, 'Windows'))
+                                    🪟
+                                    @elseif(str_contains($session->visitor->os, 'macOS'))
+                                    🍎
+                                    @elseif(str_contains($session->visitor->os, 'Linux'))
+                                    🐧
+                                    @elseif(str_contains($session->visitor->os, 'Android'))
+                                    🤖
+                                    @elseif(str_contains($session->visitor->os, 'iOS'))
+                                    📱
+                                    @else
+                                    💻
+                                    @endif
+                                </span>
+                                @endif
+                                @if($session->visitor->browser)
+                                <span title="{{ $session->visitor->browser }}">
+                                    @if(str_contains($session->visitor->browser, 'Chrome'))
+                                    🌐
+                                    @elseif(str_contains($session->visitor->browser, 'Firefox'))
+                                    🦊
+                                    @elseif(str_contains($session->visitor->browser, 'Safari'))
+                                    🧭
+                                    @elseif(str_contains($session->visitor->browser, 'Edge'))
+                                    📘
+                                    @else
+                                    🌍
+                                    @endif
+                                </span>
+                                @endif
+                            </div>
                         </div>
                     </div>
                 </td>
-                <td class="px-4 py-3 text-sm text-gray-400 font-mono">{{ $session->ip_address }}</td>
+                <td class="px-4 py-3 text-sm text-gray-400 font-mono">{{ $session->visitor->ip_address }}</td>
                 <td class="px-4 py-3">
                     <a href="{{ $session->current_page }}" target="_blank" class="text-sm text-[#fe9e00] hover:underline truncate block max-w-xs">
                         {{ Str::limit($session->current_page, 40) }}
                     </a>
                 </td>
                 <td class="px-4 py-3 text-sm text-gray-500 truncate max-w-xs">
-                    {{ $session->referrer ? Str::limit($session->referrer, 30) : 'Direct' }}
+                    {{ $session->referrer_url ? Str::limit($session->referrer_url, 30) : 'Direct' }}
                 </td>
                 <td class="px-4 py-3">
                     <span class="px-2 py-0.5 bg-[#222] text-gray-400 text-xs rounded">{{ $session->client->name }}</span>

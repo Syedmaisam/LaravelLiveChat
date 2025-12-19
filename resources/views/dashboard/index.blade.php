@@ -100,6 +100,104 @@
     </div>
 </div>
 
+<!-- All Chats List -->
+<div class="mt-6 bg-[#111] border border-[#222] rounded-lg">
+    <div class="px-5 py-4 border-b border-[#222] flex items-center justify-between">
+        <h3 class="font-semibold">All Conversations</h3>
+        <div class="flex items-center gap-2">
+            <select id="label-filter" onchange="filterChats()" class="bg-black border border-[#333] rounded px-3 py-1 text-xs text-white focus:border-[#fe9e00] focus:outline-none">
+                <option value="">All Labels</option>
+                <option value="new">New</option>
+                <option value="pending">Pending</option>
+                <option value="converted">Converted</option>
+                <option value="no_response">No Response</option>
+                <option value="closed">Closed</option>
+            </select>
+        </div>
+    </div>
+    <div class="divide-y divide-[#222] max-h-[500px] overflow-y-auto" id="chat-list">
+        @forelse($allChats as $chat)
+        <a href="{{ route('dashboard.chat', $chat['id']) }}" 
+           class="block px-5 py-3 hover:bg-[#1a1a1a] chat-item" 
+           data-label="{{ $chat['label'] }}"
+           data-status="{{ $chat['status'] }}">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center flex-1 min-w-0">
+                    <!-- Online indicator + Avatar -->
+                    <div class="relative mr-3 shrink-0">
+                        <div class="w-10 h-10 rounded-full bg-[#222] flex items-center justify-center text-sm font-bold text-[#fe9e00]">
+                            {{ strtoupper(substr($chat['visitor_name'], 0, 1)) }}
+                        </div>
+                        @if($chat['is_online'])
+                        <span class="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 rounded-full border-2 border-[#111]"></span>
+                        @endif
+                    </div>
+                    
+                    <!-- Chat info -->
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-center gap-2">
+                            <span class="font-medium text-sm truncate">{{ $chat['visitor_name'] }}</span>
+                            <!-- Status badge -->
+                            @if($chat['status'] === 'waiting')
+                            <span class="px-1.5 py-0.5 bg-red-500/20 text-red-400 text-[10px] font-medium rounded">WAITING</span>
+                            @endif
+                            <!-- Label badge -->
+                            @if($chat['label'])
+                            <span class="px-1.5 py-0.5 text-[10px] font-medium rounded
+                                @if($chat['label'] === 'new') bg-blue-500/20 text-blue-400
+                                @elseif($chat['label'] === 'pending') bg-yellow-500/20 text-yellow-400
+                                @elseif($chat['label'] === 'converted') bg-green-500/20 text-green-400
+                                @elseif($chat['label'] === 'no_response') bg-gray-500/20 text-gray-400
+                                @else bg-[#222] text-gray-500
+                                @endif">
+                                {{ strtoupper(str_replace('_', ' ', $chat['label'])) }}
+                            </span>
+                            @endif
+                        </div>
+                        <div class="text-xs text-gray-500 truncate mt-0.5">
+                            @if($chat['last_message'])
+                            {{ $chat['last_message'] }}
+                            @else
+                            <span class="italic">No messages yet</span>
+                            @endif
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Right side: time & unread -->
+                <div class="text-right ml-3 shrink-0">
+                    <div class="text-[10px] text-gray-500">
+                        {{ $chat['last_message_at'] ? \Carbon\Carbon::parse($chat['last_message_at'])->diffForHumans(null, true) : '' }}
+                    </div>
+                    @if($chat['unread_count'] > 0)
+                    <span class="inline-flex items-center justify-center w-5 h-5 bg-[#fe9e00] text-black text-[10px] font-bold rounded-full mt-1">
+                        {{ $chat['unread_count'] > 9 ? '9+' : $chat['unread_count'] }}
+                    </span>
+                    @endif
+                </div>
+            </div>
+        </a>
+        @empty
+        <div class="px-5 py-12 text-center text-gray-500">
+            <p>No conversations yet</p>
+        </div>
+        @endforelse
+    </div>
+</div>
+
+<script>
+function filterChats() {
+    const label = document.getElementById('label-filter').value;
+    document.querySelectorAll('.chat-item').forEach(item => {
+        if (!label || item.dataset.label === label) {
+            item.style.display = '';
+        } else {
+            item.style.display = 'none';
+        }
+    });
+}
+</script>
+
 @if(isset($currentChat))
 <!-- Current Chat Modal/Section -->
 <div class="mt-6 bg-[#111] border border-[#222] rounded-lg">

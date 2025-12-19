@@ -47,11 +47,29 @@ Route::middleware('auth')->group(function () {
     Route::post('/dashboard/chat/{chat}/typing', [\App\Http\Controllers\Dashboard\ChatController::class, 'typing'])->name('dashboard.chat.typing');
     Route::post('/dashboard/chat/{chat}/join', [\App\Http\Controllers\Dashboard\ChatController::class, 'joinChat'])->name('dashboard.chat.join');
     Route::post('/dashboard/chat/{chat}/close', [\App\Http\Controllers\Dashboard\ChatController::class, 'closeChat'])->name('dashboard.chat.close');
+    Route::post('/dashboard/chat/{chat}/label', [\App\Http\Controllers\Dashboard\ChatController::class, 'updateLabel'])->name('dashboard.chat.label');
     Route::get('/dashboard/chat/{chat}/messages', [\App\Http\Controllers\Dashboard\ChatController::class, 'getMessages'])->name('dashboard.chat.messages');
     Route::get('/dashboard/message/{message}/download', [\App\Http\Controllers\Dashboard\ChatController::class, 'downloadFile'])->name('dashboard.message.download');
     
+    // Chat Notes
+    Route::post('/dashboard/chat/{chat}/notes', [\App\Http\Controllers\Dashboard\ChatController::class, 'addNote'])->name('dashboard.chat.notes.store');
+    Route::put('/dashboard/chat/{chat}/notes/{note}', [\App\Http\Controllers\Dashboard\ChatController::class, 'updateNote'])->name('dashboard.chat.notes.update');
+    Route::delete('/dashboard/chat/{chat}/notes/{note}', [\App\Http\Controllers\Dashboard\ChatController::class, 'deleteNote'])->name('dashboard.chat.notes.destroy');
+    Route::post('/dashboard/chat/{chat}/notes/{note}/pin', [\App\Http\Controllers\Dashboard\ChatController::class, 'togglePinNote'])->name('dashboard.chat.notes.pin');
+    
+    // Proactive Messages (Agent-initiated)
+    Route::post('/dashboard/visitor/{visitor}/proactive', [\App\Http\Controllers\Dashboard\ChatController::class, 'sendProactiveMessage'])->name('dashboard.visitor.proactive');
+    
     // Reporting
     Route::get('/dashboard/reporting', [\App\Http\Controllers\ReportingController::class, 'index'])->name('dashboard.reporting');
+    
+    // Canned Responses
+    Route::get('/dashboard/canned-responses', [\App\Http\Controllers\Dashboard\CannedResponseController::class, 'index'])->name('dashboard.canned-responses.index');
+    Route::post('/dashboard/canned-responses', [\App\Http\Controllers\Dashboard\CannedResponseController::class, 'store'])->name('dashboard.canned-responses.store');
+    Route::put('/dashboard/canned-responses/{cannedResponse}', [\App\Http\Controllers\Dashboard\CannedResponseController::class, 'update'])->name('dashboard.canned-responses.update');
+    Route::delete('/dashboard/canned-responses/{cannedResponse}', [\App\Http\Controllers\Dashboard\CannedResponseController::class, 'destroy'])->name('dashboard.canned-responses.destroy');
+    Route::get('/api/canned-responses/search', [\App\Http\Controllers\Dashboard\CannedResponseController::class, 'search'])->name('api.canned-responses.search');
+    Route::post('/api/canned-responses/{cannedResponse}/use', [\App\Http\Controllers\Dashboard\CannedResponseController::class, 'use'])->name('api.canned-responses.use');
     
     // Admin Routes
     Route::prefix('admin')->name('admin.')->group(function () {
@@ -64,6 +82,13 @@ Route::middleware('auth')->group(function () {
         // Visitors
         Route::get('/visitors', [\App\Http\Controllers\Admin\VisitorController::class, 'index'])->name('visitors.index');
         Route::get('/visitors/{session}', [\App\Http\Controllers\Admin\VisitorController::class, 'show'])->name('visitors.show');
+        
+        // Auto-greetings
+        Route::get('/auto-greetings', [\App\Http\Controllers\Admin\AutoGreetingController::class, 'index'])->name('auto-greetings.index');
+        Route::post('/auto-greetings', [\App\Http\Controllers\Admin\AutoGreetingController::class, 'store'])->name('auto-greetings.store');
+        Route::put('/auto-greetings/{autoGreeting}', [\App\Http\Controllers\Admin\AutoGreetingController::class, 'update'])->name('auto-greetings.update');
+        Route::delete('/auto-greetings/{autoGreeting}', [\App\Http\Controllers\Admin\AutoGreetingController::class, 'destroy'])->name('auto-greetings.destroy');
+        Route::post('/auto-greetings/{autoGreeting}/toggle', [\App\Http\Controllers\Admin\AutoGreetingController::class, 'toggle'])->name('auto-greetings.toggle');
     });
 
     // Profile Settings

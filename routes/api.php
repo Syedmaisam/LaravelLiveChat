@@ -14,6 +14,8 @@ Route::prefix('visitor')->group(function () {
     Route::post('/session', [VisitorTrackingController::class, 'createSession']);
     Route::get('/status', [VisitorTrackingController::class, 'getStatus']);
     Route::post('/page-visit', [VisitorTrackingController::class, 'trackPageVisit']);
+    Route::post('/heartbeat', [VisitorTrackingController::class, 'heartbeat']);
+    Route::post('/offline', [VisitorTrackingController::class, 'markOffline']);
 });
 
 // Chat endpoints (public, authenticated by widget_key)
@@ -23,6 +25,8 @@ Route::prefix('chat')->group(function () {
     Route::post('/{chat}/typing', [ChatController::class, 'typing']);
     Route::get('/{chat}/messages', [ChatController::class, 'getMessages']);
     Route::post('/{chat}/file', [ChatController::class, 'uploadFile']);
+    Route::post('/{chat}/read', [ChatController::class, 'markAsRead']);
+    Route::post('/{chat}/rate', [ChatController::class, 'rateChat']);
 });
 
 // Agent API endpoints (authenticated via session/CSRF)

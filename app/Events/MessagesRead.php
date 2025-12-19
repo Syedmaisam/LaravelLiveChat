@@ -2,43 +2,42 @@
 
 namespace App\Events;
 
-use App\Models\VisitorSession;
+use App\Models\Chat;
 use Illuminate\Broadcasting\Channel;
 use Illuminate\Broadcasting\InteractsWithSockets;
-use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 
-class VisitorOnlineStatusChanged implements ShouldBroadcastNow
+class MessagesRead implements ShouldBroadcastNow
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
     public function __construct(
-        public VisitorSession $session,
-        public bool $isOnline
+        public Chat $chat,
+        public array $messageIds,
+        public string $readBy // 'agent' or 'visitor'
     ) {}
 
     public function broadcastOn(): array
     {
         return [
-            new Channel('visitors.' . $this->session->client_id),
-            new Channel('monitoring'),
+            new Channel('chat.' . $this->chat->id),
         ];
     }
 
     public function broadcastAs(): string
     {
-        return 'visitor.status.changed';
+        return 'messages.read';
     }
 
     public function broadcastWith(): array
     {
         return [
-            'visitor_id' => $this->session->visitor_id,
-            'session_id' => $this->session->id,
-            'is_online' => $this->isOnline,
-            'updated_at' => now()->toIso8601String(),
+            'chat_id' => $this->chat->id,
+            'message_ids' => $this->messageIds,
+            'read_by' => $this->readBy,
+            'read_at' => now()->toIso8601String(),
         ];
     }
 }

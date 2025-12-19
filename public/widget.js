@@ -11,6 +11,18 @@
         widgetKey: null,
         visitorKey: null,
         sessionKey: null,
+        // Client widget settings (loaded from API)
+        widgetColor: '#fe9e00',
+        widgetIcon: 'chat',
+        widgetIconUrl: null,
+        widgetPosition: 'bottom-right',
+        welcomeTitle: 'Hi there! 👋',
+        welcomeMessage: 'How can we help you today?',
+        agentName: 'Support Team',
+        agentAvatar: null,
+        showBranding: true,
+        autoOpen: false,
+        autoOpenDelay: 5,
     };
 
     // State
@@ -52,6 +64,19 @@
                 config.wsHost = data.ws_host || '127.0.0.1';
                 config.wsPort = data.ws_port || 8080;
                 config.wsScheme = data.ws_scheme || 'http';
+                
+                // Load client widget settings
+                config.widgetColor = data.widget_color || '#fe9e00';
+                config.widgetIcon = data.widget_icon || 'chat';
+                config.widgetIconUrl = data.widget_icon_url || null;
+                config.widgetPosition = data.widget_position || 'bottom-right';
+                config.welcomeTitle = data.widget_welcome_title || 'Hi there! 👋';
+                config.welcomeMessage = data.widget_welcome_message || 'How can we help you today?';
+                config.agentName = data.widget_agent_name || 'Support Team';
+                config.agentAvatar = data.widget_agent_avatar || null;
+                config.showBranding = data.widget_show_branding !== false;
+                config.autoOpen = data.widget_auto_open || false;
+                config.autoOpenDelay = data.widget_auto_open_delay || 5;
 
                 // Get or create visitor key from cookie
                 config.visitorKey = getCookie('live_chat_visitor_key');
@@ -76,7 +101,20 @@
                     loadSavedVisitorDetails();
                     // Also init WebSocket for general listening
                     initWebSocket();
+                    // Subscribe to visitor channel for proactive messages
+                    subscribeToVisitorChannel();
                 });
+                
+                // Auto-open widget after delay
+                if (config.autoOpen) {
+                    setTimeout(() => {
+                        if (!state.isOpen && !getCookie('live_chat_auto_opened')) {
+                            state.isOpen = true;
+                            document.getElementById('live-chat-window').classList.add('open');
+                            setCookie('live_chat_auto_opened', '1', 1); // Don't auto-open again today
+                        }
+                    }, config.autoOpenDelay * 1000);
+                }
             })
             .catch(err => {
                 console.error('Failed to load widget config:', err);
@@ -91,17 +129,30 @@
 
     // Create widget HTML
     function createWidget() {
+        // Determine icon SVG based on widget_icon setting
+        const iconSvg = getIconSvg(config.widgetIcon);
+        
         const widget = document.createElement('div');
         widget.id = 'live-chat-widget';
+        widget.className = config.widgetPosition === 'bottom-left' ? 'position-left' : '';
         widget.innerHTML = `
+            <!-- Proactive Message Bubble -->
+            <div class="proactive-bubble" id="proactive-bubble" style="display: none;">
+                <div class="proactive-content">
+                    <div class="proactive-avatar" id="proactive-avatar"></div>
+                    <div class="proactive-text">
+                        <strong id="proactive-agent-name"></strong>
+                        <p id="proactive-message-text"></p>
+                    </div>
+                    <button class="proactive-close" onclick="window.LiveChatWidget.closeProactiveBubble()">×</button>
+                </div>
+            </div>
             <div class="live-chat-button" onclick="window.LiveChatWidget.toggle()">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-                </svg>
+                ${config.widgetIconUrl ? `<img src="${config.widgetIconUrl}" width="28" height="28" alt="Chat">` : iconSvg}
             </div>
             <div class="live-chat-window" id="live-chat-window">
                 <div class="live-chat-header">
-                    <h3>Chat with us</h3>
+                    <h3>${config.welcomeTitle}</h3>
                     <div class="live-chat-actions">
                         <button onclick="window.LiveChatWidget.minimize()">−</button>
                         <button onclick="window.LiveChatWidget.close()">×</button>
@@ -112,7 +163,11 @@
                     <div id="live-chat-messages" class="live-chat-messages">
                         <div class="messages-container" id="messages-container">
                             <div class="welcome-message">
-                                <p>Welcome! How can we help you today?</p>
+                                <div class="agent-info">
+                                    ${config.agentAvatar ? `<img src="${config.agentAvatar}" class="agent-avatar">` : `<div class="agent-avatar-placeholder">${config.agentName.charAt(0)}</div>`}
+                                    <strong>${config.agentName}</strong>
+                                </div>
+                                <p>${config.welcomeMessage}</p>
                             </div>
                         </div>
                         <div class="typing-indicator" id="typing-indicator" style="display: none;">
@@ -155,10 +210,22 @@
                 z-index: 9999;
                 font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             }
+            #live-chat-widget.position-left {
+                right: auto;
+                left: 20px;
+            }
+            #live-chat-widget.position-left .live-chat-window {
+                right: auto;
+                left: 0;
+            }
+            #live-chat-widget.position-left .proactive-bubble {
+                right: auto;
+                left: 0;
+            }
             .live-chat-button {
                 width: 60px;
                 height: 60px;
-                background: #007bff;
+                background: ${config.widgetColor};
                 color: white;
                 border-radius: 50%;
                 display: flex;
@@ -170,6 +237,107 @@
             }
             .live-chat-button:hover {
                 transform: scale(1.1);
+            }
+            .live-chat-button img {
+                border-radius: 50%;
+                object-fit: cover;
+            }
+            /* Proactive Message Bubble */
+            .proactive-bubble {
+                position: absolute;
+                bottom: 80px;
+                right: 0;
+                width: 320px;
+                background: white;
+                border-radius: 12px;
+                box-shadow: 0 5px 40px rgba(0,0,0,0.16);
+                animation: slideUp 0.3s ease;
+                cursor: pointer;
+            }
+            .proactive-bubble:hover {
+                box-shadow: 0 8px 50px rgba(0,0,0,0.2);
+            }
+            @keyframes slideUp {
+                from { opacity: 0; transform: translateY(20px); }
+                to { opacity: 1; transform: translateY(0); }
+            }
+            .proactive-content {
+                display: flex;
+                align-items: flex-start;
+                padding: 16px;
+                gap: 12px;
+            }
+            .proactive-avatar {
+                width: 40px;
+                height: 40px;
+                background: ${config.widgetColor};
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                color: white;
+                font-weight: bold;
+                flex-shrink: 0;
+                font-size: 14px;
+            }
+            .proactive-avatar img {
+                width: 100%;
+                height: 100%;
+                border-radius: 50%;
+                object-fit: cover;
+            }
+            .proactive-text {
+                flex: 1;
+                min-width: 0;
+            }
+            .proactive-text strong {
+                display: block;
+                font-size: 14px;
+                color: #333;
+                margin-bottom: 4px;
+            }
+            .proactive-text p {
+                margin: 0;
+                font-size: 14px;
+                color: #555;
+                line-height: 1.4;
+            }
+            .proactive-close {
+                position: absolute;
+                top: 8px;
+                right: 8px;
+                background: none;
+                border: none;
+                font-size: 18px;
+                color: #999;
+                cursor: pointer;
+                padding: 0;
+                line-height: 1;
+            }
+            .proactive-close:hover {
+                color: #333;
+            }
+            /* Welcome message agent info */
+            .agent-info {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                margin-bottom: 8px;
+            }
+            .agent-avatar, .agent-avatar-placeholder {
+                width: 36px;
+                height: 36px;
+                border-radius: 50%;
+                object-fit: cover;
+            }
+            .agent-avatar-placeholder {
+                background: ${config.widgetColor};
+                color: white;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-weight: bold;
+                font-size: 14px;
             }
             .live-chat-window {
                 position: absolute;
@@ -379,6 +547,8 @@
                 config.visitorKey = data.visitor_key;
                 setCookie('live_chat_visitor_key', config.visitorKey, 365);
             }
+            // Start heartbeat after session is established
+            startHeartbeat();
         })
         .catch(err => console.error('Tracking error:', err));
     }
@@ -398,6 +568,59 @@
     function initWebSocket() {
         // WebSocket connection will be set up when chat is created
         // For now, we'll use polling as fallback
+    }
+
+    // Start heartbeat to keep session alive
+    function startHeartbeat() {
+        if (!config.sessionKey) return;
+        
+        // Send heartbeat every 30 seconds
+        state.heartbeatInterval = setInterval(() => {
+            fetch(`${config.apiUrl}/visitor/heartbeat`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ session_key: config.sessionKey }),
+            }).catch(err => console.log('Heartbeat failed:', err));
+        }, 30000);
+
+        // Handle page visibility change
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                // Page hidden - send offline signal
+                sendOfflineSignal();
+            } else {
+                // Page visible - send heartbeat immediately
+                fetch(`${config.apiUrl}/visitor/heartbeat`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ session_key: config.sessionKey }),
+                }).catch(err => console.log('Heartbeat failed:', err));
+            }
+        });
+
+        // Handle page unload
+        window.addEventListener('beforeunload', () => {
+            sendOfflineSignal();
+        });
+    }
+
+    // Send offline signal using beacon API (reliable on page unload)
+    function sendOfflineSignal() {
+        if (!config.sessionKey) return;
+        
+        const data = JSON.stringify({ session_key: config.sessionKey });
+        
+        // Use sendBeacon for reliable delivery on page unload
+        if (navigator.sendBeacon) {
+            const blob = new Blob([data], { type: 'application/json' });
+            navigator.sendBeacon(`${config.apiUrl}/visitor/offline`, blob);
+        } else {
+            // Fallback to sync XHR
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', `${config.apiUrl}/visitor/offline`, false);
+            xhr.setRequestHeader('Content-Type', 'application/json');
+            xhr.send(data);
+        }
     }
 
     // Attach event listeners
@@ -609,6 +832,12 @@
                     if (data.sender_type === 'agent' && !state.messages.find(m => m.id === data.id)) {
                         state.messages.push(data);
                         renderMessages();
+                        // Play notification sound for agent messages
+                        playNotificationSound();
+                        // Show visual indicator if chat window is closed
+                        if (!state.isOpen) {
+                            showUnreadBadge();
+                        }
                     }
                 });
 
@@ -661,6 +890,45 @@
         }
     }
 
+    // Play notification sound using Web Audio API
+    function playNotificationSound() {
+        try {
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator.frequency.value = 600;
+            oscillator.type = 'sine';
+            gainNode.gain.value = 0.1;
+            
+            oscillator.start();
+            setTimeout(() => oscillator.stop(), 200);
+        } catch (e) {
+            console.log('Could not play notification sound');
+        }
+    }
+
+    // Show unread badge on chat button
+    function showUnreadBadge() {
+        const button = document.querySelector('.live-chat-button');
+        if (button && !button.querySelector('.unread-badge')) {
+            const badge = document.createElement('span');
+            badge.className = 'unread-badge';
+            badge.style.cssText = 'position:absolute;top:-4px;right:-4px;width:12px;height:12px;background:#fe9e00;border-radius:50%;border:2px solid #1a1a1a;';
+            button.style.position = 'relative';
+            button.appendChild(badge);
+        }
+    }
+
+    // Hide unread badge when chat opens
+    function hideUnreadBadge() {
+        const badge = document.querySelector('.live-chat-button .unread-badge');
+        if (badge) badge.remove();
+    }
+
     // Utility functions
     function getCookie(name) {
         const value = `; ${document.cookie}`;
@@ -687,6 +955,84 @@
         div.textContent = text;
         return div.innerHTML;
     }
+    
+    // Get icon SVG based on icon type
+    function getIconSvg(iconType) {
+        const icons = {
+            'chat': `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>`,
+            'support': `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>`,
+            'message': `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>`,
+            'help': `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>`,
+        };
+        return icons[iconType] || icons['chat'];
+    }
+    
+    // Subscribe to visitor channel for proactive messages
+    function subscribeToVisitorChannel() {
+        if (!state.pusher || !config.visitorKey) {
+            console.log('Cannot subscribe to visitor channel - no pusher or visitor key');
+            return;
+        }
+        
+        const channel = state.pusher.subscribe('visitor.' + config.visitorKey);
+        
+        channel.bind('proactive.message', function(data) {
+            console.log('Received proactive message:', data);
+            showProactiveBubble(data.message, data.agent_name, data.agent_avatar);
+        });
+        
+        console.log('Subscribed to visitor channel:', config.visitorKey);
+    }
+    
+    // Show proactive message bubble
+    function showProactiveBubble(message, agentName, agentAvatar) {
+        const bubble = document.getElementById('proactive-bubble');
+        const avatarEl = document.getElementById('proactive-avatar');
+        const nameEl = document.getElementById('proactive-agent-name');
+        const textEl = document.getElementById('proactive-message-text');
+        
+        if (!bubble) return;
+        
+        // Set content
+        if (agentAvatar) {
+            avatarEl.innerHTML = `<img src="${agentAvatar}" alt="${agentName}">`;
+        } else {
+            avatarEl.textContent = agentName.charAt(0).toUpperCase();
+        }
+        nameEl.textContent = agentName;
+        textEl.textContent = message;
+        
+        // Show bubble
+        bubble.style.display = 'block';
+        
+        // Play notification sound
+        playNotificationSound();
+        showUnreadBadge();
+        
+        // Click bubble to open chat
+        bubble.onclick = function(e) {
+            if (e.target.classList.contains('proactive-close')) return;
+            bubble.style.display = 'none';
+            state.isOpen = true;
+            document.getElementById('live-chat-window').classList.add('open');
+            hideUnreadBadge();
+        };
+        
+        // Auto-hide after 30 seconds
+        setTimeout(() => {
+            if (bubble.style.display !== 'none') {
+                bubble.style.display = 'none';
+            }
+        }, 30000);
+    }
+    
+    // Close proactive bubble
+    function closeProactiveBubble() {
+        const bubble = document.getElementById('proactive-bubble');
+        if (bubble) {
+            bubble.style.display = 'none';
+        }
+    }
 
     // Public API
     window.LiveChatWidget = {
@@ -694,8 +1040,11 @@
         toggle: function() {
             state.isOpen = !state.isOpen;
             const window = document.getElementById('live-chat-window');
+            const bubble = document.getElementById('proactive-bubble');
             if (state.isOpen) {
                 window.classList.add('open');
+                hideUnreadBadge(); // Clear unread indicator when opened
+                if (bubble) bubble.style.display = 'none'; // Hide proactive bubble when chat opens
             } else {
                 window.classList.remove('open');
             }
@@ -709,6 +1058,7 @@
             document.getElementById('live-chat-window').classList.remove('open');
         },
         sendMessage: sendMessage,
+        closeProactiveBubble: closeProactiveBubble,
     };
 })();
 

@@ -21,12 +21,14 @@ class Message extends Model
         'file_size',
         'file_type',
         'is_read',
+        'read_at',
         'deleted_at',
     ];
 
     protected $casts = [
         'is_read' => 'boolean',
         'deleted_at' => 'datetime',
+        'read_at' => 'datetime',
     ];
 
     public function chat(): BelongsTo

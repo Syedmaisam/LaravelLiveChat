@@ -40,7 +40,7 @@ class MessageSent implements ShouldBroadcastNow
             'sender_type' => $this->message->sender_type,
             'sender_id' => $this->message->sender_id,
             'sender_name' => $this->message->sender_type === 'agent'
-                ? ($sender->pseudo_name ?? $sender->name)
+                ? ($sender->active_pseudo_name ?? $sender->name)
                 : ($sender->name ?? 'Visitor'),
             'message_type' => $this->message->message_type,
             'message' => $this->message->message,

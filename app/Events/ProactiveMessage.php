@@ -2,43 +2,43 @@
 
 namespace App\Events;
 
-use App\Models\VisitorSession;
+use App\Models\Visitor;
 use Illuminate\Broadcasting\Channel;
 use Illuminate\Broadcasting\InteractsWithSockets;
-use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 
-class VisitorOnlineStatusChanged implements ShouldBroadcastNow
+class ProactiveMessage implements ShouldBroadcastNow
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
     public function __construct(
-        public VisitorSession $session,
-        public bool $isOnline
+        public Visitor $visitor,
+        public string $message,
+        public string $agentName,
+        public ?string $agentAvatar = null
     ) {}
 
     public function broadcastOn(): array
     {
         return [
-            new Channel('visitors.' . $this->session->client_id),
-            new Channel('monitoring'),
+            new Channel('visitor.' . $this->visitor->visitor_key),
         ];
     }
 
     public function broadcastAs(): string
     {
-        return 'visitor.status.changed';
+        return 'proactive.message';
     }
 
     public function broadcastWith(): array
     {
         return [
-            'visitor_id' => $this->session->visitor_id,
-            'session_id' => $this->session->id,
-            'is_online' => $this->isOnline,
-            'updated_at' => now()->toIso8601String(),
+            'message' => $this->message,
+            'agent_name' => $this->agentName,
+            'agent_avatar' => $this->agentAvatar,
+            'timestamp' => now()->toIso8601String(),
         ];
     }
 }

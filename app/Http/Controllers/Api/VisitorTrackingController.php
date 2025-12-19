@@ -41,6 +41,9 @@ class VisitorTrackingController extends Controller
         }
 
         if (!$visitor) {
+            // Get geolocation data from IP
+            $geoData = $this->getGeoLocation($request->ip());
+            
             $visitor = Visitor::create([
                 'visitor_key' => Str::uuid(),
                 'client_id' => $client->id,
@@ -48,6 +51,11 @@ class VisitorTrackingController extends Controller
                 'email' => $request->email,
                 'phone' => $request->phone,
                 'ip_address' => $request->ip(),
+                'country' => $geoData['country'] ?? null,
+                'country_code' => $geoData['countryCode'] ?? null,
+                'city' => $geoData['city'] ?? null,
+                'timezone' => $geoData['timezone'] ?? null,
+                'isp' => $geoData['isp'] ?? null,
                 'device' => $this->detectDevice($request->userAgent()),
                 'browser' => $this->detectBrowser($request->userAgent()),
                 'os' => $this->detectOS($request->userAgent()),
@@ -95,16 +103,24 @@ class VisitorTrackingController extends Controller
             ]);
         }
 
-        // Track page visit
-        VisitorPageVisit::create([
-            'visitor_session_id' => $session->id,
-            'page_url' => $request->page_url,
-            'page_title' => $request->page_title,
-            'visited_at' => now(),
-        ]);
+        // Track page visit - but skip if same as last visit (prevent reload spam)
+        $lastVisit = VisitorPageVisit::where('visitor_session_id', $session->id)
+            ->latest('visited_at')
+            ->first();
+        
+        $isDuplicate = $lastVisit && $lastVisit->page_url === $request->page_url;
+        
+        if (!$isDuplicate) {
+            VisitorPageVisit::create([
+                'visitor_session_id' => $session->id,
+                'page_url' => $request->page_url,
+                'page_title' => $request->page_title,
+                'visited_at' => now(),
+            ]);
 
-        // Broadcast page change
-        event(new VisitorPageChanged($session, $request->page_url, $request->page_title));
+            // Broadcast page change only for new pages
+            event(new VisitorPageChanged($session, $request->page_url, $request->page_title));
+        }
 
         return response()->json([
             'visitor_key' => $visitor->visitor_key,
@@ -207,6 +223,59 @@ class VisitorTrackingController extends Controller
         return response()->json(['success' => true]);
     }
 
+    /**
+     * Heartbeat to keep visitor session alive
+     */
+    public function heartbeat(Request $request)
+    {
+        $request->validate([
+            'session_key' => 'required|uuid',
+        ]);
+
+        $session = VisitorSession::where('session_key', $request->session_key)->first();
+
+        if (!$session) {
+            return response()->json(['error' => 'Session not found'], 404);
+        }
+
+        $wasOffline = !$session->is_online;
+        
+        $session->update([
+            'is_online' => true,
+            'last_activity_at' => now(),
+        ]);
+
+        // Broadcast if visitor came back online
+        if ($wasOffline) {
+            event(new VisitorOnlineStatusChanged($session, true));
+        }
+
+        return response()->json(['success' => true]);
+    }
+
+    /**
+     * Mark visitor as offline (called on page unload/visibility change)
+     */
+    public function markOffline(Request $request)
+    {
+        $request->validate([
+            'session_key' => 'required|uuid',
+        ]);
+
+        $session = VisitorSession::where('session_key', $request->session_key)->first();
+
+        if ($session && $session->is_online) {
+            $session->update([
+                'is_online' => false,
+                'ended_at' => now(),
+            ]);
+            
+            event(new VisitorOnlineStatusChanged($session, false));
+        }
+
+        return response()->json(['success' => true]);
+    }
+
     private function detectDevice($userAgent): ?string
     {
         if (preg_match('/mobile|android|iphone|ipad/i', $userAgent)) {
@@ -235,5 +304,30 @@ class VisitorTrackingController extends Controller
         if (preg_match('/android/i', $userAgent)) return 'Android';
         if (preg_match('/iphone|ipad|ipod/i', $userAgent)) return 'iOS';
         return 'Unknown';
+    }
+
+    /**
+     * Get geolocation data from IP address using ip-api.com
+     */
+    private function getGeoLocation(string $ip): array
+    {
+        // Skip for localhost/private IPs
+        if (in_array($ip, ['127.0.0.1', '::1']) || str_starts_with($ip, '192.168.') || str_starts_with($ip, '10.')) {
+            return [];
+        }
+
+        try {
+            $response = file_get_contents("http://ip-api.com/json/{$ip}?fields=status,country,countryCode,city,timezone,isp");
+            $data = json_decode($response, true);
+            
+            if ($data && $data['status'] === 'success') {
+                return $data;
+            }
+        } catch (\Exception $e) {
+            // Log error but don't fail the request
+            \Log::warning('Geolocation lookup failed: ' . $e->getMessage());
+        }
+
+        return [];
     }
 }

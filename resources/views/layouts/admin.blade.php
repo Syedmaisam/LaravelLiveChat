@@ -40,6 +40,96 @@
                     cluster: 'mt1',
                 });
                 console.log('Reverb client initialized');
+                
+                // Request notification permission
+                if ('Notification' in window && Notification.permission === 'default') {
+                    Notification.requestPermission();
+                }
+                
+                // Subscribe to monitoring channel for new visitors
+                const monitoringChannel = window.reverbClient.subscribe('monitoring');
+                monitoringChannel.bind('visitor.status.changed', function(data) {
+                    if (data.is_online) {
+                        showNotification('New Visitor', 'A new visitor is online', '/dashboard/monitoring');
+                    }
+                });
+                
+                // Subscribe to all chat channels (will be overridden in specific chat views)
+                window.showNotification = function(title, body, url) {
+                    // Play notification sound
+                    playNotificationSound();
+                    
+                    // Show browser notification if permitted
+                    if ('Notification' in window && Notification.permission === 'granted') {
+                        const notification = new Notification(title, {
+                            body: body,
+                            icon: '/favicon.ico',
+                            badge: '/favicon.ico',
+                            tag: 'visiontech-chat',
+                            requireInteraction: false,
+                        });
+                        
+                        notification.onclick = function() {
+                            window.focus();
+                            if (url) window.location.href = url;
+                            notification.close();
+                        };
+                        
+                        // Auto-close after 5 seconds
+                        setTimeout(() => notification.close(), 5000);
+                    }
+                    
+                    // Also show in-page toast
+                    showToast(title, body);
+                };
+                
+                window.playNotificationSound = function() {
+                    // Create a simple beep sound using Web Audio API
+                    try {
+                        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                        const oscillator = audioContext.createOscillator();
+                        const gainNode = audioContext.createGain();
+                        
+                        oscillator.connect(gainNode);
+                        gainNode.connect(audioContext.destination);
+                        
+                        oscillator.frequency.value = 800;
+                        oscillator.type = 'sine';
+                        gainNode.gain.value = 0.1;
+                        
+                        oscillator.start();
+                        setTimeout(() => oscillator.stop(), 150);
+                    } catch (e) {
+                        console.log('Could not play notification sound');
+                    }
+                };
+                
+                window.showToast = function(title, body) {
+                    const toast = document.createElement('div');
+                    toast.className = 'fixed bottom-4 right-4 bg-[#1a1a1a] border border-[#333] rounded-lg shadow-xl p-4 max-w-sm z-50 animate-slide-up';
+                    toast.innerHTML = `
+                        <div class="flex items-start gap-3">
+                            <div class="w-10 h-10 bg-[#fe9e00] rounded-full flex items-center justify-center text-black flex-shrink-0">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/>
+                                </svg>
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <p class="font-semibold text-white text-sm">${title}</p>
+                                <p class="text-gray-400 text-xs mt-0.5 truncate">${body}</p>
+                            </div>
+                            <button onclick="this.parentElement.parentElement.remove()" class="text-gray-500 hover:text-white">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                                </svg>
+                            </button>
+                        </div>
+                    `;
+                    document.body.appendChild(toast);
+                    
+                    // Auto-remove after 5 seconds
+                    setTimeout(() => toast.remove(), 5000);
+                };
             }
         });
     </script>
@@ -76,6 +166,16 @@
                 <a href="{{ route('admin.visitors.index') }}" class="flex items-center px-3 py-2 rounded text-sm {{ request()->routeIs('admin.visitors.*') ? 'bg-[#fe9e00] text-black font-medium' : 'text-gray-400 hover:text-white hover:bg-[#1a1a1a]' }}">
                     <svg class="w-4 h-4 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
                     Visitors
+                </a>
+
+                <a href="{{ route('dashboard.canned-responses.index') }}" class="flex items-center px-3 py-2 rounded text-sm {{ request()->routeIs('dashboard.canned-responses.*') ? 'bg-[#fe9e00] text-black font-medium' : 'text-gray-400 hover:text-white hover:bg-[#1a1a1a]' }}">
+                    <svg class="w-4 h-4 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"/></svg>
+                    Canned Responses
+                </a>
+
+                <a href="{{ route('admin.auto-greetings.index') }}" class="flex items-center px-3 py-2 rounded text-sm {{ request()->routeIs('admin.auto-greetings.*') ? 'bg-[#fe9e00] text-black font-medium' : 'text-gray-400 hover:text-white hover:bg-[#1a1a1a]' }}">
+                    <svg class="w-4 h-4 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+                    Auto-Greetings
                 </a>
 
                 <div class="text-[10px] uppercase tracking-wider text-gray-500 px-3 mt-6 mb-2">Management</div>

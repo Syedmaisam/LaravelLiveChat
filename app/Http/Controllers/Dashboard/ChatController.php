@@ -220,4 +220,179 @@ class ChatController extends Controller
 
         return response()->json(['success' => true]);
     }
+
+    public function updateLabel(Request $request, Chat $chat)
+    {
+        $user = Auth::user();
+
+        if (!$user->clients()->where('clients.id', $chat->client_id)->exists()) {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
+        $request->validate([
+            'label' => 'required|in:new,pending,converted,no_response,closed',
+        ]);
+
+        $chat->update(['label' => $request->label]);
+
+        if ($request->wantsJson()) {
+            return response()->json(['success' => true, 'label' => $request->label]);
+        }
+
+        return back()->with('success', 'Chat label updated');
+    }
+
+    // ==================== INTERNAL NOTES ====================
+
+    public function addNote(Request $request, Chat $chat)
+    {
+        $user = Auth::user();
+
+        if (!$user->clients()->where('clients.id', $chat->client_id)->exists()) {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
+        $request->validate(['note' => 'required|string|max:2000']);
+
+        $note = \App\Models\ChatNote::create([
+            'chat_id' => $chat->id,
+            'user_id' => $user->id,
+            'note' => $request->note,
+        ]);
+
+        if ($request->wantsJson()) {
+            return response()->json([
+                'success' => true,
+                'note' => [
+                    'id' => $note->id,
+                    'note' => $note->note,
+                    'user_name' => $user->name,
+                    'is_pinned' => $note->is_pinned,
+                    'created_at' => $note->created_at->diffForHumans(),
+                ],
+            ]);
+        }
+
+        return back()->with('success', 'Note added');
+    }
+
+    public function updateNote(Request $request, Chat $chat, \App\Models\ChatNote $note)
+    {
+        $user = Auth::user();
+
+        if ($note->user_id !== $user->id) {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
+        $request->validate(['note' => 'required|string|max:2000']);
+
+        $note->update(['note' => $request->note]);
+
+        if ($request->wantsJson()) {
+            return response()->json(['success' => true]);
+        }
+
+        return back()->with('success', 'Note updated');
+    }
+
+    public function deleteNote(Chat $chat, \App\Models\ChatNote $note)
+    {
+        $user = Auth::user();
+
+        if ($note->user_id !== $user->id && !$user->isAdmin()) {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
+        $note->delete();
+
+        return response()->json(['success' => true]);
+    }
+
+    public function togglePinNote(Chat $chat, \App\Models\ChatNote $note)
+    {
+        $user = Auth::user();
+
+        if (!$user->clients()->where('clients.id', $chat->client_id)->exists()) {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
+        $note->update(['is_pinned' => !$note->is_pinned]);
+
+        return response()->json(['success' => true, 'is_pinned' => $note->is_pinned]);
+    }
+
+    // ==================== PROACTIVE MESSAGES ====================
+
+    /**
+     * Send a proactive message to a visitor (agent-initiated chat)
+     */
+    public function sendProactiveMessage(Request $request, \App\Models\Visitor $visitor)
+    {
+        $user = Auth::user();
+
+        // Verify agent has access to this visitor's client
+        if (!$user->clients()->where('clients.id', $visitor->client_id)->exists()) {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
+        $request->validate([
+            'message' => 'required|string|max:500',
+        ]);
+
+        // Find or create an active chat with this visitor
+        $chat = \App\Models\Chat::where('visitor_id', $visitor->id)
+            ->whereIn('status', ['waiting', 'active'])
+            ->first();
+
+        if (!$chat) {
+            // Create a new chat
+            $chat = \App\Models\Chat::create([
+                'client_id' => $visitor->client_id,
+                'visitor_id' => $visitor->id,
+                'visitor_session_id' => $visitor->sessions()->latest()->first()?->id,
+                'status' => 'active',
+                'label' => 'new',
+                'last_message_at' => now(),
+            ]);
+        }
+
+        // Join the chat
+        ChatParticipant::firstOrCreate(
+            ['chat_id' => $chat->id, 'user_id' => $user->id],
+            ['joined_at' => now()]
+        );
+
+        // Create the message
+        $message = Message::create([
+            'chat_id' => $chat->id,
+            'sender_type' => 'agent',
+            'sender_id' => $user->id,
+            'message_type' => 'text',
+            'message' => $request->message,
+            'is_read' => false,
+        ]);
+
+        // Update chat
+        $chat->update([
+            'status' => 'active',
+            'last_message_at' => now(),
+        ]);
+
+        // Broadcast to the chat channel (for when visitor opens chat)
+        event(new MessageSent($message));
+
+        // Also broadcast a proactive message notification to visitor's widget
+        event(new \App\Events\ProactiveMessage(
+            $visitor,
+            $request->message,
+            $user->active_pseudo_name ?? $user->name,
+            null // avatar
+        ));
+
+        return response()->json([
+            'success' => true,
+            'chat_id' => $chat->id,
+            'message_id' => $message->id,
+        ]);
+    }
 }

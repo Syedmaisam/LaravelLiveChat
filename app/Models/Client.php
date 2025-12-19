@@ -15,11 +15,27 @@ class Client extends Model
         'logo',
         'widget_settings',
         'is_active',
+        // Widget Appearance
+        'widget_color',
+        'widget_icon',
+        'widget_icon_url',
+        'widget_position',
+        // Welcome Message
+        'widget_welcome_title',
+        'widget_welcome_message',
+        'widget_agent_name',
+        'widget_agent_avatar',
+        // Behavior
+        'widget_show_branding',
+        'widget_auto_open',
+        'widget_auto_open_delay',
     ];
 
     protected $casts = [
         'widget_settings' => 'array',
         'is_active' => 'boolean',
+        'widget_show_branding' => 'boolean',
+        'widget_auto_open' => 'boolean',
     ];
 
     public function agents(): BelongsToMany

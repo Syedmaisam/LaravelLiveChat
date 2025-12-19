@@ -97,9 +97,13 @@ class ChatController extends Controller
             'is_read' => false,
         ]);
 
-        if ($chat->status === 'waiting') {
-            $chat->update(['status' => 'active']);
-        }
+        // Update chat tracking
+        $chat->update([
+            'status' => $chat->status === 'waiting' ? 'active' : $chat->status,
+            'last_message_at' => now(),
+            'unread_count' => $chat->unread_count + 1,
+            'label' => $chat->label ?? 'new',
+        ]);
 
         event(new MessageSent($message));
 
@@ -246,5 +250,76 @@ class ChatController extends Controller
         event(new \App\Events\AgentTyping($chat, $user));
 
         return response()->json(['success' => true]);
+    }
+
+    /**
+     * Mark messages as read (called by widget when visitor reads agent messages)
+     */
+    public function markAsRead(Request $request, Chat $chat)
+    {
+        $request->validate([
+            'visitor_key' => 'required|string',
+        ]);
+
+        // Verify visitor owns this chat
+        $visitor = Visitor::where('visitor_key', $request->visitor_key)->first();
+        if (!$visitor || $chat->visitor_id !== $visitor->id) {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
+        // Mark all agent messages as read
+        $unreadMessages = $chat->messages()
+            ->where('sender_type', 'agent')
+            ->where('is_read', false)
+            ->get();
+
+        if ($unreadMessages->count() > 0) {
+            $messageIds = $unreadMessages->pluck('id')->toArray();
+            
+            Message::whereIn('id', $messageIds)->update([
+                'is_read' => true,
+                'read_at' => now(),
+            ]);
+
+            // Broadcast read receipt to admin
+            event(new \App\Events\MessagesRead($chat, $messageIds, 'visitor'));
+        }
+
+        return response()->json(['success' => true, 'count' => $unreadMessages->count()]);
+    }
+
+    /**
+     * Submit chat rating and feedback
+     */
+    public function rateChat(Request $request, Chat $chat)
+    {
+        $request->validate([
+            'visitor_key' => 'required|string',
+            'rating' => 'required|integer|min:1|max:5',
+            'feedback' => 'nullable|string|max:1000',
+        ]);
+
+        // Verify visitor owns this chat
+        $visitor = Visitor::where('visitor_key', $request->visitor_key)->first();
+        if (!$visitor || $chat->visitor_id !== $visitor->id) {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
+        // Check if already rated
+        if ($chat->rating) {
+            return response()->json(['error' => 'Chat already rated'], 400);
+        }
+
+        $rating = \App\Models\ChatRating::create([
+            'chat_id' => $chat->id,
+            'visitor_id' => $visitor->id,
+            'rating' => $request->rating,
+            'feedback' => $request->feedback,
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'rating' => $rating->rating,
+        ]);
     }
 }

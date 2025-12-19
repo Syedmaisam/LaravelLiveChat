@@ -14,6 +14,9 @@ class Chat extends Model
         'visitor_id',
         'visitor_session_id',
         'status',
+        'label',
+        'last_message_at',
+        'unread_count',
         'lead_form_filled',
         'started_at',
         'ended_at',
@@ -24,6 +27,7 @@ class Chat extends Model
         'lead_form_filled' => 'boolean',
         'started_at' => 'datetime',
         'ended_at' => 'datetime',
+        'last_message_at' => 'datetime',
     ];
 
     public function client(): BelongsTo
@@ -56,5 +60,15 @@ class Chat extends Model
     public function transfers(): HasMany
     {
         return $this->hasMany(ChatTransfer::class);
+    }
+
+    public function notes(): HasMany
+    {
+        return $this->hasMany(ChatNote::class)->orderBy('is_pinned', 'desc')->orderBy('created_at', 'desc');
+    }
+
+    public function rating()
+    {
+        return $this->hasOne(ChatRating::class);
     }
 }

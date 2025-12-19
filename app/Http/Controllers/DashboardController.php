@@ -16,6 +16,32 @@ class DashboardController extends Controller
         $user = Auth::user();
         $clientIds = $user->clients()->pluck('clients.id');
 
+        // All chats for sidebar (ordered by last activity)
+        $allChats = Chat::whereIn('client_id', $clientIds)
+            ->with(['visitor', 'client', 'visitorSession', 'messages' => function ($q) {
+                $q->orderBy('created_at', 'desc')->limit(1);
+            }])
+            ->orderByRaw("CASE WHEN status = 'waiting' THEN 0 WHEN status = 'active' THEN 1 ELSE 2 END")
+            ->orderByDesc('last_message_at')
+            ->orderByDesc('updated_at')
+            ->get()
+            ->map(function ($chat) {
+                $lastMsg = $chat->messages->first();
+                return [
+                    'id' => $chat->id,
+                    'visitor_name' => $chat->visitor->name ?? 'Anonymous',
+                    'visitor_email' => $chat->visitor->email,
+                    'client_name' => $chat->client->name,
+                    'status' => $chat->status,
+                    'label' => $chat->label,
+                    'unread_count' => $chat->unread_count ?? 0,
+                    'last_message' => $lastMsg?->message ? \Str::limit($lastMsg->message, 50) : null,
+                    'last_message_at' => $chat->last_message_at ?? $chat->updated_at,
+                    'is_online' => $chat->visitorSession?->is_online ?? false,
+                    'started_at' => $chat->started_at,
+                ];
+            });
+
         $waitingChats = Chat::whereIn('client_id', $clientIds)
             ->where('status', 'waiting')
             ->with(['visitor', 'client'])
@@ -33,7 +59,7 @@ class DashboardController extends Controller
             ->orderBy('updated_at', 'desc')
             ->get();
             
-        return compact('waitingChats', 'activeChats', 'clientIds');
+        return compact('waitingChats', 'activeChats', 'clientIds', 'allChats');
     }
 
     public function index(Request $request)
