@@ -65,20 +65,9 @@
                                 {{ $message->message }}
                             @endif
                         </div>
-                        <div class="flex items-center gap-1 mt-1 {{ $message->sender_type === 'visitor' ? 'justify-start' : 'justify-end' }}">
-                            <span class="text-xs text-gray-500">{{ $message->created_at->format('H:i') }}</span>
-                            @if($message->sender_type === 'agent')
-                                @if($message->read_at)
-                                    <svg class="w-4 h-4 text-[#fe9e00]" fill="currentColor" viewBox="0 0 24 24" title="Read at {{ $message->read_at->format('H:i') }}">
-                                        <path d="M18 7l-1.41-1.41-6.34 6.34 1.41 1.41L18 7zm4.24-1.41L11.66 16.17 7.48 12l-1.41 1.41L11.66 19l12-12-1.42-1.41zM.41 13.41L6 19l1.41-1.41L1.83 12 .41 13.41z"/>
-                                    </svg>
-                                @else
-                                    <svg class="w-4 h-4 text-gray-500" fill="currentColor" viewBox="0 0 24 24" title="Sent">
-                                        <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/>
-                                    </svg>
-                                @endif
-                            @endif
-                        </div>
+                        <p class="text-xs text-gray-500 mt-1 {{ $message->sender_type === 'visitor' ? 'text-left' : 'text-right' }}">
+                            {{ $message->created_at->format('H:i') }}
+                        </p>
                     </div>
                 </div>
                 @endforeach
@@ -182,9 +171,8 @@
                     @endif
                     @forelse($pageVisits as $visit)
                     <div class="p-2 bg-[#222] rounded">
-                        <p class="text-sm truncate font-medium">{{ $visit->page_title ?? 'Untitled Page' }}</p>
-                        <a href="{{ $visit->page_url }}" target="_blank" class="text-xs text-[#fe9e00] hover:underline truncate block">{{ Str::limit($visit->page_url, 50) }}</a>
-                        <p class="text-xs text-gray-500 mt-1">{{ $visit->created_at->format('H:i:s') }}</p>
+                        <p class="text-sm truncate">{{ $visit->page_title ?? $visit->page_url }}</p>
+                        <p class="text-xs text-gray-500">{{ $visit->created_at->format('H:i:s') }}</p>
                     </div>
                     @empty
                     <p class="text-sm text-gray-500">No pages visited</p>

@@ -103,24 +103,16 @@ class VisitorTrackingController extends Controller
             ]);
         }
 
-        // Track page visit - but skip if same as last visit (prevent reload spam)
-        $lastVisit = VisitorPageVisit::where('visitor_session_id', $session->id)
-            ->latest('visited_at')
-            ->first();
-        
-        $isDuplicate = $lastVisit && $lastVisit->page_url === $request->page_url;
-        
-        if (!$isDuplicate) {
-            VisitorPageVisit::create([
-                'visitor_session_id' => $session->id,
-                'page_url' => $request->page_url,
-                'page_title' => $request->page_title,
-                'visited_at' => now(),
-            ]);
+        // Track page visit
+        VisitorPageVisit::create([
+            'visitor_session_id' => $session->id,
+            'page_url' => $request->page_url,
+            'page_title' => $request->page_title,
+            'visited_at' => now(),
+        ]);
 
-            // Broadcast page change only for new pages
-            event(new VisitorPageChanged($session, $request->page_url, $request->page_title));
-        }
+        // Broadcast page change
+        event(new VisitorPageChanged($session, $request->page_url, $request->page_title));
 
         return response()->json([
             'visitor_key' => $visitor->visitor_key,
