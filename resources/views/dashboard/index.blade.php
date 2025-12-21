@@ -31,7 +31,7 @@
         </div>
         <div class="divide-y divide-[#222] max-h-80 overflow-y-auto">
             @forelse($waitingChats as $chat)
-            <a href="{{ route('dashboard.chat', $chat) }}" class="block px-5 py-3 hover:bg-[#1a1a1a]">
+            <a href="{{ route('inbox.chat', $chat) }}" class="block px-5 py-3 hover:bg-[#1a1a1a]">
                 <div class="flex items-center justify-between">
                     <div>
                         <div class="font-medium text-sm">{{ $chat->visitor->name ?? 'New Visitor' }}</div>
@@ -54,7 +54,7 @@
         </div>
         <div class="divide-y divide-[#222] max-h-80 overflow-y-auto">
             @forelse($activeChats as $chat)
-            <a href="{{ route('dashboard.chat', $chat) }}" class="block px-5 py-3 hover:bg-[#1a1a1a]">
+            <a href="{{ route('inbox.chat', $chat) }}" class="block px-5 py-3 hover:bg-[#1a1a1a]">
                 <div class="flex items-center justify-between">
                     <div class="flex items-center">
                         <div class="w-8 h-8 rounded bg-[#222] flex items-center justify-center text-xs font-bold text-[#fe9e00] mr-3">
@@ -117,7 +117,7 @@
     </div>
     <div class="divide-y divide-[#222] max-h-[500px] overflow-y-auto" id="chat-list">
         @forelse($allChats as $chat)
-        <a href="{{ route('dashboard.chat', $chat['id']) }}" 
+        <a href="{{ route('inbox.chat', $chat['uuid']) }}" 
            class="block px-5 py-3 hover:bg-[#1a1a1a] chat-item" 
            data-label="{{ $chat['label'] }}"
            data-status="{{ $chat['status'] }}">

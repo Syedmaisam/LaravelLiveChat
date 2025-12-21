@@ -25,6 +25,7 @@ Route::prefix('chat')->group(function () {
     Route::post('/{chat}/typing', [ChatController::class, 'typing']);
     Route::get('/{chat}/messages', [ChatController::class, 'getMessages']);
     Route::post('/{chat}/file', [ChatController::class, 'uploadFile']);
+    Route::get('/{chat}/file/{message}/download', [ChatController::class, 'downloadFile']);
     Route::post('/{chat}/read', [ChatController::class, 'markAsRead']);
     Route::post('/{chat}/rate', [ChatController::class, 'rateChat']);
 });
@@ -33,4 +34,11 @@ Route::prefix('chat')->group(function () {
 Route::prefix('agent')->middleware(['web', 'auth'])->group(function () {
     Route::post('/chat/{chat}/message', [ChatController::class, 'agentSendMessage']);
     Route::post('/chat/{chat}/typing', [ChatController::class, 'agentTyping']);
+    
+    // Canned responses
+    Route::get('/canned-responses/search', [\App\Http\Controllers\Dashboard\CannedResponseController::class, 'search']);
+    Route::post('/canned-responses/{cannedResponse}/use', [\App\Http\Controllers\Dashboard\CannedResponseController::class, 'use']);
+    
+    // Nickname selection
+    Route::post('/chat/{chat}/nickname', [ChatController::class, 'updateNickname']);
 });

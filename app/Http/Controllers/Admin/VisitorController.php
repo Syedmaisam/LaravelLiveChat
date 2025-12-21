@@ -25,7 +25,7 @@ class VisitorController extends Controller
                 ->paginate(50);
         } else {
             $visitors = $query->where('is_online', false)
-                ->orderBy('ended_at', 'desc')
+                ->orderBy('last_activity_at', 'desc')
                 ->paginate(50);
         }
 
@@ -72,6 +72,7 @@ class VisitorController extends Controller
             ]),
             'has_chat' => $session->chats->count() > 0,
             'chat_id' => $session->chats->first()?->id,
+            'chat_uuid' => $session->chats->first()?->uuid,
         ]);
     }
 }

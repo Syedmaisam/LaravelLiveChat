@@ -29,6 +29,7 @@ class DashboardController extends Controller
                 $lastMsg = $chat->messages->first();
                 return [
                     'id' => $chat->id,
+                    'uuid' => $chat->uuid,
                     'visitor_name' => $chat->visitor->name ?? 'Anonymous',
                     'visitor_email' => $chat->visitor->email,
                     'client_name' => $chat->client->name,
@@ -116,7 +117,7 @@ class DashboardController extends Controller
             ->get();
 
         // Load chat participants
-        $participants = $chat->participants()->with('user')->get();
+        $participants = $chat->participants()->get();
 
         // Get file messages (media)
         $files = $chat->messages()->where('message_type', 'file')->get();
@@ -135,6 +136,126 @@ class DashboardController extends Controller
             'pageVisits' => $pageVisits,
             'hasMoreMessages' => $chat->messages()->count() > 50,
         ]);
+    }
+
+    public function inbox(Chat $chat)
+    {
+        $user = Auth::user();
+
+        // Verify agent has access
+        if (!$user->clients()->where('clients.id', $chat->client_id)->exists()) {
+            abort(403);
+        }
+
+        // Load recent messages (last 50) - ordered oldest to newest
+        $messages = $chat->messages()
+            ->orderBy('created_at', 'asc')
+            ->limit(50)
+            ->get();
+
+        // Load chat participants
+        $participants = $chat->participants()->get();
+
+        // Get file messages (media)
+        $files = $chat->messages()->where('message_type', 'file')->get();
+
+        // Get visitor's page visits from session
+        $pageVisits = $chat->visitorSession?->pageVisits()
+            ->orderBy('created_at', 'desc')
+            ->limit(20)
+            ->get() ?? collect();
+
+        // Load sidebar data
+        $clientIds = $user->clients()->pluck('clients.id');
+
+        // Active visitors (all online sessions, with or without chats)
+        $activeVisitors = VisitorSession::whereIn('client_id', $clientIds)
+            ->where('is_online', true)
+            ->with(['visitor', 'chats' => function($q) {
+                $q->latest('last_message_at')->limit(1);
+            }])
+            ->latest('last_activity_at')
+            ->get();
+
+        // Recent chats (last 50)
+        $recentChats = Chat::whereIn('client_id', $clientIds)
+            ->with(['visitor', 'visitorSession'])
+            ->latest('last_message_at')
+            ->limit(50)
+            ->get();
+
+        return view('dashboard.inbox', [
+            'chat' => $chat->load(['visitor', 'client', 'visitorSession']),
+            'messages' => $messages,
+            'participants' => $participants,
+            'files' => $files,
+            'pageVisits' => $pageVisits,
+            'hasMoreMessages' => $chat->messages()->count() > 50,
+            'activeVisitors' => $activeVisitors,
+            'recentChats' => $recentChats,
+        ]);
+    }
+
+    public function initiateFromSession(VisitorSession $session)
+    {
+        $user = Auth::user();
+
+        // Verify agent has access to this client
+        if (!$user->clients()->where('clients.id', $session->client_id)->exists()) {
+            abort(403);
+        }
+
+        // Check if chat already exists for this session
+        $chat = Chat::where('visitor_session_id', $session->id)->first();
+
+        if (!$chat) {
+            // Create new chat
+            $chat = Chat::create([
+                'visitor_id' => $session->visitor_id,
+                'client_id' => $session->client_id,
+                'visitor_session_id' => $session->id,
+                'status' => 'active',
+            ]);
+
+            // Add current user as participant
+            $chat->participants()->attach($user->id);
+        }
+
+        // Redirect to inbox with this chat
+        return redirect()->route('inbox.chat', $chat);
+    }
+
+    /**
+     * Mark visitor messages as read
+     */
+    public function markAsRead(Chat $chat)
+    {
+        $user = Auth::user();
+
+        // Verify agent has access
+        if (!$user->clients()->where('clients.id', $chat->client_id)->exists()) {
+            abort(403);
+        }
+
+        // Mark all visitor messages as read
+        $unreadMessages = $chat->messages()
+            ->where('sender_type', 'visitor')
+            ->where('is_read', false)
+            ->get();
+
+        if ($unreadMessages->count() > 0) {
+            $messageIds = $unreadMessages->pluck('id')->toArray();
+            
+            \App\Models\Message::whereIn('id', $messageIds)->update([
+                'is_read' => true,
+                'read_at' => now(),
+            ]);
+
+            // Broadcast read receipt to visitor
+            event(new \App\Events\MessagesRead($chat, $messageIds, 'agent'));
+        }
+
+        return response()->json(['success' => true]);
     }
 
     /**
@@ -181,6 +302,6 @@ class DashboardController extends Controller
         // Update chat status to active
         $chat->update(['status' => 'active']);
 
-        return redirect()->route('dashboard.chat', $chat);
+        return redirect()->route('inbox.chat', $chat);
     }
 }

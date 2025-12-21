@@ -1,14 +1,13 @@
-@extends('layouts.dashboard')
+@extends('layouts.admin')
 
 @section('title', 'Profile Settings')
 
 @section('content')
-<div class="flex-1 bg-[#0D0D0D] overflow-auto">
-    <div class="max-w-2xl mx-auto py-8 px-6">
-        <div class="mb-6">
-            <h1 class="text-xl font-bold text-white">Profile Settings</h1>
-            <p class="text-gray-500 text-sm mt-1">Manage your display names and preferences</p>
-        </div>
+<div class="max-w-4xl">
+    <div class="mb-6">
+        <h1 class="text-2xl font-bold text-white">Profile Settings</h1>
+        <p class="text-gray-400 mt-1">Manage your display names and preferences</p>
+    </div>
 
         @if(session('success'))
         <div class="bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 px-4 py-3 rounded-lg mb-6 text-sm flex items-center">

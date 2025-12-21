@@ -6,10 +6,12 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Str;
 
 class Chat extends Model
 {
     protected $fillable = [
+        'uuid',
         'client_id',
         'visitor_id',
         'visitor_session_id',
@@ -30,6 +32,25 @@ class Chat extends Model
         'last_message_at' => 'datetime',
     ];
 
+    protected static function boot()
+    {
+        parent::boot();
+
+        static::creating(function ($chat) {
+            if (empty($chat->uuid)) {
+                $chat->uuid = (string) Str::uuid();
+            }
+        });
+    }
+
+    /**
+     * Get the route key for the model.
+     */
+    public function getRouteKeyName()
+    {
+        return 'uuid';
+    }
+
     public function client(): BelongsTo
     {
         return $this->belongsTo(Client::class);
@@ -48,7 +69,7 @@ class Chat extends Model
     public function participants(): BelongsToMany
     {
         return $this->belongsToMany(User::class, 'chat_participants')
-            ->withPivot(['joined_at', 'left_at'])
+            ->withPivot(['joined_at', 'left_at', 'agent_nickname'])
             ->withTimestamps();
     }
 

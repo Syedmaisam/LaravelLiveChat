@@ -38,6 +38,12 @@
                     forceTLS: scheme === 'https',
                     enabledTransports: ['ws', 'wss'],
                     cluster: 'mt1',
+                    authEndpoint: '/broadcasting/auth',
+                    auth: {
+                        headers: {
+                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+                        }
+                    }
                 });
                 console.log('Reverb client initialized');
                 
@@ -52,6 +58,24 @@
                     if (data.is_online) {
                         showNotification('New Visitor', 'A new visitor is online', '/dashboard/monitoring');
                     }
+                });
+
+                // Subscribe to agent private channel for notifications
+                const userId = {{ Auth::id() }};
+                console.log('Subscribing to private-agent.' + userId);
+                const agentChannel = window.reverbClient.subscribe('private-agent.' + userId);
+                
+                agentChannel.bind('pusher:subscription_succeeded', function() {
+                    console.log('Successfully subscribed to agent notification channel');
+                });
+                
+                agentChannel.bind('pusher:subscription_error', function(error) {
+                    console.error('Failed to subscribe to agent channel:', error);
+                });
+                
+                agentChannel.bind('agent.notification', function(data) {
+                    console.log('Agent notification received:', data);
+                    showNotification(data.title, data.body, data.url);
                 });
                 
                 // Subscribe to all chat channels (will be overridden in specific chat views)
@@ -213,12 +237,19 @@
                             <div class="text-xs text-gray-500">{{ Auth::user()->roles->first()->name ?? 'User' }}</div>
                         </div>
                     </div>
-                    <form method="POST" action="{{ route('logout') }}">
-                        @csrf
-                        <button type="submit" class="text-gray-500 hover:text-[#fe9e00]" title="Logout">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
-                        </button>
-                    </form>
+                    <div class="flex items-center gap-2">
+                        <a href="{{ route('profile.edit') }}" class="text-gray-500 hover:text-[#fe9e00]" title="Profile Settings">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+                            </svg>
+                        </a>
+                        <form method="POST" action="{{ route('logout') }}">
+                            @csrf
+                            <button type="submit" class="text-gray-500 hover:text-[#fe9e00]" title="Logout">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+                            </button>
+                        </form>
+                    </div>
                 </div>
             </div>
         </aside>

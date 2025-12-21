@@ -103,13 +103,21 @@ class VisitorTrackingController extends Controller
             ]);
         }
 
-        // Track page visit
-        VisitorPageVisit::create([
-            'visitor_session_id' => $session->id,
-            'page_url' => $request->page_url,
-            'page_title' => $request->page_title,
-            'visited_at' => now(),
-        ]);
+        // Track page visit (avoid duplicates for reloads)
+        $lastVisit = VisitorPageVisit::where('visitor_session_id', $session->id)
+            ->latest('visited_at')
+            ->first();
+
+        if ($lastVisit && $lastVisit->page_url === $request->page_url) {
+            $lastVisit->update(['visited_at' => now()]);
+        } else {
+            VisitorPageVisit::create([
+                'visitor_session_id' => $session->id,
+                'page_url' => $request->page_url,
+                'page_title' => $request->page_title,
+                'visited_at' => now(),
+            ]);
+        }
 
         // Broadcast page change
         event(new VisitorPageChanged($session, $request->page_url, $request->page_title));
@@ -242,7 +250,30 @@ class VisitorTrackingController extends Controller
             event(new VisitorOnlineStatusChanged($session, true));
         }
 
+        // Clean up stale sessions (offline after 2 minutes of inactivity)
+        $this->cleanupStaleSessions();
+
         return response()->json(['success' => true]);
+    }
+
+    /**
+     * Mark stale sessions as offline (1 minute of inactivity = 2 missed heartbeats)
+     */
+    private function cleanupStaleSessions()
+    {
+        $oneMinuteAgo = now()->subMinutes(1);
+        
+        $staleSessions = VisitorSession::where('is_online', true)
+            ->where('last_activity_at', '<', $oneMinuteAgo)
+            ->get();
+
+        foreach ($staleSessions as $session) {
+            $session->update([
+                'is_online' => false,
+            ]);
+            
+            event(new VisitorOnlineStatusChanged($session, false));
+        }
     }
 
     /**

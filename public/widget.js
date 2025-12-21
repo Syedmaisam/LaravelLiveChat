@@ -477,6 +477,23 @@
                 background: #f1f1f1;
                 color: #333;
             }
+            .message-status {
+                display: flex;
+                justify-content: flex-end;
+                margin-top: 4px;
+                line-height: 1;
+                opacity: 0.9;
+            }
+            .message-status.read {
+                opacity: 1;
+            }
+            .message-status svg {
+                width: 18px;
+                height: 18px;
+            }
+            .message.visitor .message-status svg {
+                stroke: white;
+            }
             .live-chat-footer {
                 padding: 12px;
                 border-top: 1px solid #eee;
@@ -585,17 +602,16 @@
 
         // Handle page visibility change
         document.addEventListener('visibilitychange', () => {
-            if (document.hidden) {
-                // Page hidden - send offline signal
-                sendOfflineSignal();
-            } else {
-                // Page visible - send heartbeat immediately
+            if (!document.hidden) {
+                // Page visible again - send heartbeat immediately to ensure we're marked online
                 fetch(`${config.apiUrl}/visitor/heartbeat`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ session_key: config.sessionKey }),
                 }).catch(err => console.log('Heartbeat failed:', err));
             }
+            // Don't send offline when tab is hidden - user is still on the page
+            // Let the server-side timeout handle marking offline after 2 minutes of inactivity
         });
 
         // Handle page unload
@@ -726,7 +742,33 @@
         } else {
             container.innerHTML = state.messages.map(msg => `
                 <div class="message ${msg.sender_type}">
-                    <div class="message-bubble">${escapeHtml(msg.message || msg.file_name || '')}</div>
+                    <div class="message-bubble">
+                        ${msg.message_type === 'file' ? 
+                            (msg.file_type && msg.file_type.startsWith('image/') ? 
+                                `<img src="${config.apiUrl}/chat/${state.chatId}/file/${msg.id}/download?visitor_key=${config.visitorKey}" 
+                                      alt="${escapeHtml(msg.file_name)}" 
+                                      class="max-w-full rounded cursor-pointer" 
+                                      onclick="window.open(this.src, '_blank')"
+                                      style="max-height: 200px;">
+                                 <div class="text-xs mt-1" style="color: ${msg.sender_type === 'visitor' ? '#fff' : '#333'}">${escapeHtml(msg.file_name)}</div>` :
+                                `<a href="${config.apiUrl}/chat/${state.chatId}/file/${msg.id}/download?visitor_key=${config.visitorKey}" 
+                                    download="${escapeHtml(msg.file_name)}"
+                                    class="file-download-link"
+                                    style="color: ${msg.sender_type === 'visitor' ? '#fff' : '#333'}; text-decoration: underline;">
+                                    📎 ${escapeHtml(msg.file_name)}
+                                 </a>`
+                            ) :
+                            escapeHtml(msg.message || '')
+                        }
+                    </div>
+                    ${msg.sender_type === 'visitor' ? `
+                        <div class="message-status ${msg.is_read ? 'read' : ''}" id="msg-status-${msg.id}">
+                            ${msg.is_read ? 
+                                '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"></path><path d="M20 6L9 17l-5-5" style="transform: translate(5px, 0)"/></svg>' : 
+                                '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"></path></svg>'
+                            }
+                        </div>
+                    ` : ''}
                 </div>
             `).join('');
         }
@@ -837,12 +879,25 @@
                         // Show visual indicator if chat window is closed
                         if (!state.isOpen) {
                             showUnreadBadge();
+                            showToastNotification(data.message || 'New message from agent');
                         }
                     }
                 });
 
                 channel.bind('agent.typing', function(data) {
                     showTypingIndicator();
+                });
+
+                channel.bind('messages.read', function(data) {
+                    if (data.reader_type === 'agent') {
+                        data.message_ids.forEach(id => {
+                            const el = document.getElementById(`msg-status-${id}`);
+                            if (el) {
+                                el.classList.add('read');
+                                el.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"></path><path d="M20 6L9 17l-5-5" style="transform: translate(5px, 0)"/></svg>';
+                            }
+                        });
+                    }
                 });
 
                 state.pusher = pusher;
@@ -927,6 +982,66 @@
     function hideUnreadBadge() {
         const badge = document.querySelector('.live-chat-button .unread-badge');
         if (badge) badge.remove();
+    }
+
+    // Show toast notification for new messages
+    function showToastNotification(message) {
+        // Remove existing toast if any
+        let toast = document.getElementById('live-chat-toast');
+        if (toast) {
+            toast.remove();
+        }
+
+        // Create new toast
+        toast = document.createElement('div');
+        toast.id = 'live-chat-toast';
+        toast.style.cssText = `
+            position: fixed;
+            bottom: 100px;
+            right: 20px;
+            background: white;
+            color: #333;
+            padding: 16px 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            max-width: 300px;
+            z-index: 999998;
+            cursor: pointer;
+            animation: slideInUp 0.3s ease-out;
+        `;
+        toast.innerHTML = `
+            <div style="font-weight: 600; margin-bottom: 4px; font-size: 14px;">New message</div>
+            <div style="font-size: 13px; color: #666;">${escapeHtml(message)}</div>
+        `;
+        
+        // Click to open widget
+        toast.onclick = function() {
+            window.LiveChatWidget.toggle();
+            toast.remove();
+        };
+
+        // Add animation keyframes if not already added
+        if (!document.getElementById('toast-animation-styles')) {
+            const style = document.createElement('style');
+            style.id = 'toast-animation-styles';
+            style.textContent = `
+                @keyframes slideInUp {
+                    from { transform: translateY(20px); opacity: 0; }
+                    to { transform: translateY(0); opacity: 1; }
+                }
+            `;
+            document.head.appendChild(style);
+        }
+
+        document.body.appendChild(toast);
+
+        // Auto-dismiss after 5 seconds
+        setTimeout(() => {
+            if (toast && toast.parentNode) {
+                toast.style.animation = 'slideInUp 0.3s ease-out reverse';
+                setTimeout(() => toast.remove(), 300);
+            }
+        }, 5000);
     }
 
     // Utility functions
@@ -1045,6 +1160,7 @@
                 window.classList.add('open');
                 hideUnreadBadge(); // Clear unread indicator when opened
                 if (bubble) bubble.style.display = 'none'; // Hide proactive bubble when chat opens
+                markMessagesAsRead();
             } else {
                 window.classList.remove('open');
             }
@@ -1059,7 +1175,20 @@
         },
         sendMessage: sendMessage,
         closeProactiveBubble: closeProactiveBubble,
+        markAsRead: markMessagesAsRead
     };
+
+    function markMessagesAsRead() {
+        if (!state.chatId || !state.isOpen) return;
+
+        fetch(`${config.apiUrl}/chat/${state.chatId}/read`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                visitor_key: config.visitorKey
+            }),
+        }).catch(err => console.error('Mark read error:', err));
+    }
 })();
 
 

@@ -177,7 +177,7 @@ function showVisitorDetail(sessionId) {
                 </div>
 
                 ${data.has_chat ? 
-                    `<a href="/dashboard/chat/${data.chat_id}" class="block w-full text-center bg-[#fe9e00] text-black font-medium py-2 rounded mb-4 hover:bg-[#e08e00]">View Chat</a>` : 
+                    `<a href="/inbox/${data.chat_uuid}" class="block w-full text-center bg-[#fe9e00] text-black font-medium py-2 rounded mb-4 hover:bg-[#e08e00]">View Chat</a>` : 
                     `<form action="/dashboard/chat/initiate" method="POST" class="mb-4">
                         <input type="hidden" name="_token" value="${document.querySelector('meta[name="csrf-token"]').content}">
                         <input type="hidden" name="session_id" value="${data.id}">
@@ -246,7 +246,7 @@ document.addEventListener('DOMContentLoaded', function() {
     setTimeout(function() {
         if (window.reverbClient) {
             // Subscribe to monitoring channel for all visitor updates
-            const monitoringChannel = window.reverbClient.subscribe('private-monitoring');
+            const monitoringChannel = window.reverbClient.subscribe('monitoring');
             
             // New visitor joined
             monitoringChannel.bind('visitor.joined', function(data) {

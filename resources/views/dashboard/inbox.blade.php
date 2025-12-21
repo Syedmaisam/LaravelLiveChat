@@ -45,6 +45,40 @@
             </div>
         </div>
         <div class="flex items-center gap-3">
+            <!-- Nickname Selector -->
+            @php
+                $agentNickname = $chat->participants()->where('user_id', Auth::id())->first()?->pivot->agent_nickname;
+                $pseudoNames = Auth::user()->pseudo_names ?? [];
+            @endphp
+            @if(count($pseudoNames) > 0)
+            <div class="relative" x-data="{ open: false }">
+                <button @click="open = !open" class="flex items-center gap-2 px-3 py-1.5 bg-[#222] hover:bg-[#333] rounded-lg text-sm transition-colors">
+                    <svg class="w-4 h-4 text-[#fe9e00]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+                    </svg>
+                    <span id="selected-nickname">{{ $agentNickname ?? 'Select Nickname' }}</span>
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                </button>
+                
+                <div x-show="open" @click.away="open = false" x-transition 
+                     class="absolute right-0 mt-2 w-48 bg-[#1a1a1a] border border-[#333] rounded-lg shadow-xl py-1 z-50">
+                    @foreach($pseudoNames as $name)
+                    <button type="button" onclick="selectNickname('{{ $name }}')" 
+                            class="block w-full text-left px-4 py-2 text-sm hover:bg-[#222] {{ $agentNickname === $name ? 'text-[#fe9e00]' : 'text-gray-300' }}">
+                        {{ $name }}
+                        @if($agentNickname === $name)
+                        <svg class="w-3 h-3 inline ml-2" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                        </svg>
+                        @endif
+                    </button>
+                    @endforeach
+                </div>
+            </div>
+            @endif
+            
             <span class="px-3 py-1 text-xs rounded-full {{ $chat->status === 'active' ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400' }}">
                 {{ ucfirst($chat->status) }}
             </span>
@@ -84,6 +118,100 @@
 
     <!-- Main Content -->
     <div class="flex-1 flex overflow-hidden">
+        <!-- Left Sidebar -->
+        <div class="w-80 border-r border-[#222] bg-[#111] flex flex-col shrink-0">
+            <!-- Tabs -->
+            <div class="flex border-b border-[#222]">
+                <button onclick="switchTab('active')" id="tab-active" class="flex-1 px-4 py-3 text-sm font-medium border-b-2 border-[#fe9e00] text-[#fe9e00]">
+                    Active Visitors
+                </button>
+                <button onclick="switchTab('all')" id="tab-all" class="flex-1 px-4 py-3 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-white">
+                    All Chats
+                </button>
+            </div>
+
+            <!-- Active Visitors List -->
+            <div id="list-active" class="flex-1 overflow-y-auto">
+                @forelse($activeVisitors as $session)
+                    @php 
+                        $visitorChat = $session->chats->first();
+                        $isCurrentChat = $visitorChat && $visitorChat->id === $chat->id;
+                    @endphp
+                    @if($visitorChat)
+                        {{-- Visitor has a chat - link to it --}}
+                        <a href="{{ route('inbox.chat', $visitorChat) }}" 
+                           class="block p-4 border-b border-[#222] hover:bg-[#1a1a1a] {{ $isCurrentChat ? 'bg-[#1a1a1a]' : '' }}">
+                            <div class="flex items-start gap-3">
+                                <div class="w-10 h-10 bg-[#fe9e00]/20 rounded-full flex items-center justify-center shrink-0">
+                                    <span class="text-[#fe9e00] font-semibold text-sm">{{ strtoupper(substr($session->visitor->name ?? 'A', 0, 2)) }}</span>
+                                </div>
+                                <div class="flex-1 min-w-0">
+                                    <div class="flex items-center justify-between">
+                                        <h4 class="font-medium truncate">{{ $session->visitor->name ?? 'Anonymous' }}</h4>
+                                        <span class="w-2 h-2 bg-green-500 rounded-full shrink-0"></span>
+                                    </div>
+                                    <p class="text-xs text-gray-500 truncate">{{ $session->client->name }}</p>
+                                    <p class="text-sm text-gray-400 truncate mt-1">Active now</p>
+                                </div>
+                            </div>
+                        </a>
+                    @else
+                        {{-- Visitor online but no chat yet - clickable to initiate chat --}}
+                        <a href="{{ route('inbox.initiate', $session) }}" 
+                           class="block p-4 border-b border-[#222] hover:bg-[#1a1a1a]">
+                            <div class="flex items-start gap-3">
+                                <div class="w-10 h-10 bg-[#fe9e00]/20 rounded-full flex items-center justify-center shrink-0">
+                                    <span class="text-[#fe9e00] font-semibold text-sm">{{ strtoupper(substr($session->visitor->name ?? 'A', 0, 2)) }}</span>
+                                </div>
+                                <div class="flex-1 min-w-0">
+                                    <div class="flex items-center justify-between">
+                                        <h4 class="font-medium truncate">{{ $session->visitor->name ?? 'Anonymous' }}</h4>
+                                        <span class="w-2 h-2 bg-green-500 rounded-full shrink-0"></span>
+                                    </div>
+                                    <p class="text-xs text-gray-500 truncate">{{ $session->client->name }}</p>
+                                    <p class="text-xs text-gray-400 truncate mt-1">Click to start chat</p>
+                                </div>
+                            </div>
+                        </a>
+                    @endif
+                @empty
+                <div class="p-4 text-center text-gray-500">
+                    <p class="text-sm">No active visitors</p>
+                </div>
+                @endforelse
+            </div>
+
+            <!-- All Chats List -->
+            <div id="list-all" class="flex-1 overflow-y-auto hidden">
+                @forelse($recentChats as $recentChat)
+                <a href="{{ route('inbox.chat', $recentChat) }}" 
+                   class="block p-4 border-b border-[#222] hover:bg-[#1a1a1a] {{ $recentChat->id === $chat->id ? 'bg-[#1a1a1a]' : '' }}">
+                    <div class="flex items-start gap-3">
+                        <div class="w-10 h-10 bg-[#fe9e00]/20 rounded-full flex items-center justify-center shrink-0">
+                            <span class="text-[#fe9e00] font-semibold text-sm">{{ strtoupper(substr($recentChat->visitor->name ?? 'A', 0, 2)) }}</span>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center justify-between">
+                                <h4 class="font-medium truncate">{{ $recentChat->visitor->name ?? 'Anonymous' }}</h4>
+                                @if($recentChat->visitorSession?->is_online)
+                                <span class="w-2 h-2 bg-green-500 rounded-full shrink-0"></span>
+                                @endif
+                            </div>
+                            <p class="text-xs text-gray-500 truncate">{{ $recentChat->client->name }}</p>
+                            <p class="text-sm text-gray-400 truncate mt-1">
+                                {{ $recentChat->last_message_at?->diffForHumans() ?? 'No messages' }}
+                            </p>
+                        </div>
+                    </div>
+                </a>
+                @empty
+                <div class="p-4 text-center text-gray-500">
+                    <p class="text-sm">No chats yet</p>
+                </div>
+                @endforelse
+            </div>
+        </div>
+
         <!-- Chat Area (Center) -->
         <div class="flex-1 flex flex-col">
             <!-- Messages -->
@@ -144,9 +272,16 @@
             </div>
 
             <!-- Message Input -->
-            <div class="border-t border-[#222] p-4 bg-[#111]">
+            <div class="border-t border-[#222] p-4 bg-[#111] relative">
+                <!-- Canned Response Dropdown -->
+                <div id="canned-dropdown" class="hidden absolute bottom-full left-4 right-4 mb-2 bg-[#1a1a1a] border border-[#333] rounded-lg shadow-lg max-h-64 overflow-y-auto z-50">
+                    <div id="canned-list" class="divide-y divide-[#222]">
+                        <!-- Populated by JavaScript -->
+                    </div>
+                </div>
+
                 <form id="message-form" class="flex gap-3">
-                    <input type="text" id="message-input" placeholder="Type a message..." 
+                    <input type="text" id="message-input" placeholder="Type a message... (type / for quick replies)" 
                         class="flex-1 bg-[#222] border border-[#333] rounded-full px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-[#fe9e00]">
                     <button type="button" id="attach-btn" class="p-2 text-gray-400 hover:text-[#fe9e00]">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -548,6 +683,169 @@
 
         // Scroll to bottom on load
         document.getElementById('messages-container').scrollTop = document.getElementById('messages-container').scrollHeight;
+
+        // Tab switching
+        function switchTab(tab) {
+            const activeTab = document.getElementById('tab-active');
+            const allTab = document.getElementById('tab-all');
+            const activeList = document.getElementById('list-active');
+            const allList = document.getElementById('list-all');
+
+            if (tab === 'active') {
+                activeTab.classList.add('border-[#fe9e00]', 'text-[#fe9e00]');
+                activeTab.classList.remove('border-transparent', 'text-gray-400');
+                allTab.classList.remove('border-[#fe9e00]', 'text-[#fe9e00]');
+                allTab.classList.add('border-transparent', 'text-gray-400');
+                activeList.classList.remove('hidden');
+                allList.classList.add('hidden');
+            } else {
+                allTab.classList.add('border-[#fe9e00]', 'text-[#fe9e00]');
+                allTab.classList.remove('border-transparent', 'text-gray-400');
+                activeTab.classList.remove('border-[#fe9e00]', 'text-[#fe9e00]');
+                activeTab.classList.add('border-transparent', 'text-gray-400');
+                allList.classList.remove('hidden');
+                activeList.classList.add('hidden');
+            }
+        }
+
+        // Canned Responses
+        let cannedResponses = [];
+        let selectedCannedIndex = -1;
+        const messageInput = document.getElementById('message-input');
+        const cannedDropdown = document.getElementById('canned-dropdown');
+        const cannedList = document.getElementById('canned-list');
+
+        messageInput.addEventListener('input', function(e) {
+            const value = e.target.value;
+            const lastChar = value.slice(-1);
+            const words = value.split(' ');
+            const lastWord = words[words.length - 1];
+
+            // Check if last word starts with /
+            if (lastWord.startsWith('/') && lastWord.length > 1) {
+                const query = lastWord.substring(1);
+                fetchCannedResponses(query);
+            } else if (lastChar === '/' && (value.length === 1 || value.slice(-2, -1) === ' ')) {
+                // Just typed / at start or after space
+                fetchCannedResponses('');
+            } else {
+                hideCannedDropdown();
+            }
+        });
+
+        messageInput.addEventListener('keydown', function(e) {
+            if (!cannedDropdown.classList.contains('hidden')) {
+                if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    selectedCannedIndex = Math.min(selectedCannedIndex + 1, cannedResponses.length - 1);
+                    updateCannedSelection();
+                } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    selectedCannedIndex = Math.max(selectedCannedIndex - 1, 0);
+                    updateCannedSelection();
+                } else if (e.key === 'Enter' && selectedCannedIndex >= 0) {
+                    e.preventDefault();
+                    selectCannedResponse(cannedResponses[selectedCannedIndex]);
+                } else if (e.key === 'Escape') {
+                    hideCannedDropdown();
+                }
+            }
+        });
+
+        function fetchCannedResponses(query) {
+            fetch(`/api/agent/canned-responses/search?q=${encodeURIComponent(query)}&client_id={{ $chat->client_id }}`, {
+                headers: {
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+                }
+            })
+            .then(res => res.json())
+            .then(data => {
+                cannedResponses = data;
+                if (data.length > 0) {
+                    showCannedDropdown(data);
+                } else {
+                    hideCannedDropdown();
+                }
+            })
+            .catch(err => console.error('Canned response fetch error:', err));
+        }
+
+        function showCannedDropdown(responses) {
+            selectedCannedIndex = 0;
+            cannedList.innerHTML = responses.map((resp, index) => `
+                <div class="canned-item p-3 hover:bg-[#222] cursor-pointer ${index === 0 ? 'bg-[#222]' : ''}" data-index="${index}">
+                    <div class="flex items-center justify-between mb-1">
+                        <span class="text-[#fe9e00] text-sm font-medium">${resp.shortcut}</span>
+                        ${resp.category ? `<span class="text-xs text-gray-500">${resp.category}</span>` : ''}
+                    </div>
+                    <div class="text-sm text-white font-medium">${resp.title}</div>
+                    <div class="text-xs text-gray-400 mt-1 line-clamp-2">${resp.content}</div>
+                </div>
+            `).join('');
+
+            // Add click handlers
+            document.querySelectorAll('.canned-item').forEach((item, index) => {
+                item.addEventListener('click', () => selectCannedResponse(responses[index]));
+            });
+
+            cannedDropdown.classList.remove('hidden');
+        }
+
+        function hideCannedDropdown() {
+            cannedDropdown.classList.add('hidden');
+            selectedCannedIndex = -1;
+        }
+
+        function updateCannedSelection() {
+            document.querySelectorAll('.canned-item').forEach((item, index) => {
+                if (index === selectedCannedIndex) {
+                    item.classList.add('bg-[#222]');
+                } else {
+                    item.classList.remove('bg-[#222]');
+                }
+            });
+        }
+
+        function selectCannedResponse(response) {
+            const input = messageInput;
+            const value = input.value;
+            const words = value.split(' ');
+            
+            // Remove the /shortcut part
+            words.pop();
+            const newValue = words.length > 0 ? words.join(' ') + ' ' + response.content : response.content;
+            
+            input.value = newValue;
+            input.focus();
+            hideCannedDropdown();
+
+            // Track usage
+            fetch(`/api/agent/canned-responses/${response.id}/use`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+                }
+            });
+        }
+
+        // Select nickname for this chat
+        function selectNickname(nickname) {
+            fetch(`/api/agent/chat/${chatId}/nickname`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+                },
+                body: JSON.stringify({ nickname: nickname })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    document.getElementById('selected-nickname').textContent = nickname;
+                }
+            })
+            .catch(err => console.error('Nickname update error:', err));
+        }
     </script>
 </body>
 </html>

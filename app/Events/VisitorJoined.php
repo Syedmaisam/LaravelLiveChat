@@ -21,8 +21,8 @@ class VisitorJoined implements ShouldBroadcast
     public function broadcastOn(): array
     {
         return [
-            new PrivateChannel('visitors.' . $this->visitor->client_id),
-            new PrivateChannel('monitoring'),
+            new Channel('visitors.' . $this->visitor->client_id),
+            new Channel('monitoring'),
         ];
     }
 

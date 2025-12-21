@@ -39,6 +39,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
     Route::get('/dashboard/monitoring', [DashboardController::class, 'monitoring'])->name('dashboard.monitoring');
     Route::get('/dashboard/chat/{chat}', [DashboardController::class, 'chat'])->name('dashboard.chat');
+    Route::get('/inbox/{chat}', [DashboardController::class, 'inbox'])->name('inbox.chat');
+    Route::get('/inbox/session/{session}', [DashboardController::class, 'initiateFromSession'])->name('inbox.initiate');
     Route::post('/dashboard/chat/initiate', [DashboardController::class, 'initiateChat'])->name('dashboard.chat.initiate');
 
     // Chat actions
@@ -49,6 +51,8 @@ Route::middleware('auth')->group(function () {
     Route::post('/dashboard/chat/{chat}/close', [\App\Http\Controllers\Dashboard\ChatController::class, 'closeChat'])->name('dashboard.chat.close');
     Route::post('/dashboard/chat/{chat}/label', [\App\Http\Controllers\Dashboard\ChatController::class, 'updateLabel'])->name('dashboard.chat.label');
     Route::get('/dashboard/chat/{chat}/messages', [\App\Http\Controllers\Dashboard\ChatController::class, 'getMessages'])->name('dashboard.chat.messages');
+    Route::post('/dashboard/chat/{chat}/read', [DashboardController::class, 'markAsRead'])->name('dashboard.chat.read');
+    Route::get('/dashboard/chat/{chat}/file/{message}/download', [\App\Http\Controllers\Dashboard\ChatController::class, 'downloadFile'])->name('dashboard.chat.file.download');
     Route::get('/dashboard/message/{message}/download', [\App\Http\Controllers\Dashboard\ChatController::class, 'downloadFile'])->name('dashboard.message.download');
     
     // Chat Notes

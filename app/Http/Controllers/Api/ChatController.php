@@ -105,7 +105,35 @@ class ChatController extends Controller
             'label' => $chat->label ?? 'new',
         ]);
 
+        // Update visitor session activity to keep them online
+        if ($chat->visitor_session_id) {
+            $chat->visitorSession()->update([
+                'last_activity_at' => now(),
+                'is_online' => true
+            ]);
+        }
+
         event(new MessageSent($message));
+
+        // Notify agents
+        $agentIds = [];
+        if ($chat->participants()->exists()) {
+            $agentIds = $chat->participants()->pluck('users.id')->toArray();
+        } else {
+            // Notify all agents assigned to this client
+            $agentIds = $chat->client->agents()->pluck('users.id')->toArray();
+        }
+
+        \Log::info('Notifying agents', ['agent_ids' => $agentIds, 'chat_id' => $chat->id]);
+
+        foreach ($agentIds as $agentId) {
+            event(new \App\Events\AgentNotification(
+                $agentId,
+                'New Message',
+                "From {$chat->visitor->name}",
+                "/dashboard/chat/{$chat->id}"
+            ));
+        }
 
         return response()->json([
             'message' => [
@@ -186,7 +214,33 @@ class ChatController extends Controller
             'is_read' => false,
         ]);
 
+        // Update visitor session activity to keep them online
+        if ($chat->visitor_session_id) {
+            $chat->visitorSession()->update([
+                'last_activity_at' => now(),
+                'is_online' => true
+            ]);
+        }
+
         event(new MessageSent($message));
+
+        // Notify agents
+        $agentIds = [];
+        if ($chat->participants()->exists()) {
+            $agentIds = $chat->participants()->pluck('users.id')->toArray();
+        } else {
+            // Notify all agents assigned to this client
+            $agentIds = $chat->client->agents()->pluck('users.id')->toArray();
+        }
+
+        foreach ($agentIds as $agentId) {
+            event(new \App\Events\AgentNotification(
+                $agentId,
+                'New File Upload',
+                "From {$chat->visitor->name}",
+                "/inbox/{$chat->uuid}"
+            ));
+        }
 
         return response()->json([
             'message' => [
@@ -289,6 +343,41 @@ class ChatController extends Controller
     }
 
     /**
+     * Download a file from a chat message
+     */
+    public function downloadFile(Request $request, Chat $chat, Message $message)
+    {
+        // visitor_key is optional for GET requests (comes from query string)
+        $visitorKey = $request->query('visitor_key') ?? $request->input('visitor_key');
+
+        // Verify visitor owns this chat (if visitor_key provided)
+        if ($visitorKey) {
+            $visitor = Visitor::where('visitor_key', $visitorKey)->first();
+            if (!$visitor || $chat->visitor_id !== $visitor->id) {
+                return response()->json(['error' => 'Unauthorized'], 403);
+            }
+        }
+
+        // Verify message belongs to this chat
+        if ($message->chat_id !== $chat->id) {
+            return response()->json(['error' => 'Message not found in this chat'], 404);
+        }
+
+        // Verify it's a file message
+        if ($message->message_type !== 'file' || !$message->file_path) {
+            return response()->json(['error' => 'Not a file message'], 400);
+        }
+
+        // Check if file exists using Storage facade
+        if (!\Storage::exists($message->file_path)) {
+            return response()->json(['error' => 'File not found'], 404);
+        }
+
+        // Serve the file using Storage facade
+        return \Storage::download($message->file_path, $message->file_name);
+    }
+
+    /**
      * Submit chat rating and feedback
      */
     public function rateChat(Request $request, Chat $chat)
@@ -321,5 +410,21 @@ class ChatController extends Controller
             'success' => true,
             'rating' => $rating->rating,
         ]);
+    }
+
+    public function updateNickname(Request $request, Chat $chat)
+    {
+        $validated = $request->validate([
+            'nickname' => 'required|string|max:100'
+        ]);
+
+        $user = $request->user();
+
+        // Update or attach participant with nickname
+        $chat->participants()->syncWithoutDetaching([
+            $user->id => ['agent_nickname' => $validated['nickname']]
+        ]);
+
+        return response()->json(['success' => true]);
     }
 }
