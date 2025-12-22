@@ -222,14 +222,14 @@
                         <div class="message-bubble px-4 py-2 rounded-2xl {{ $message->sender_type === 'visitor' ? 'bg-[#222] text-white' : 'bg-[#fe9e00] text-black' }}">
                             @if($message->message_type === 'file')
                                 @if($message->file_type && str_starts_with($message->file_type, 'image/'))
-                                    <a href="{{ route('dashboard.message.download', $message) }}" target="_blank">
-                                        <img src="{{ route('dashboard.message.download', $message) }}" 
+                                    <a href="{{ route('dashboard.chat.file.download', [$chat, $message->id]) }}" target="_blank">
+                                        <img src="{{ route('dashboard.chat.file.download', [$chat, $message->id]) }}" 
                                              alt="{{ $message->file_name }}" 
                                              class="max-w-full rounded cursor-pointer max-h-64">
                                     </a>
                                     <div class="text-xs mt-1">{{ $message->file_name }}</div>
                                 @else
-                                    <a href="{{ route('dashboard.message.download', $message) }}" 
+                                    <a href="{{ route('dashboard.chat.file.download', [$chat, $message->id]) }}" 
                                        download="{{ $message->file_name }}"
                                        class="flex items-center gap-2 hover:underline">
                                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -435,7 +435,8 @@
         });
 
         chatChannel.bind('messages.read', function(data) {
-            if (data.reader_type === 'visitor') {
+            console.log('Read receipt received:', data);
+            if (data.read_by === 'visitor') {
                 data.message_ids.forEach(id => {
                     const el = document.getElementById(`msg-status-${id}`);
                     if (el) {
@@ -731,6 +732,19 @@
             } else {
                 hideCannedDropdown();
             }
+            
+            // Send typing indicator (debounced)
+            if (!window.typingTimeout) {
+                fetch(`/api/agent/chat/{{ $chat->id }}/typing`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+                    }
+                }).catch(() => {}); // Ignore errors
+            }
+            clearTimeout(window.typingTimeout);
+            window.typingTimeout = setTimeout(() => window.typingTimeout = null, 2000);
         });
 
         messageInput.addEventListener('keydown', function(e) {

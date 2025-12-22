@@ -23,7 +23,7 @@ class VisitorTyping implements ShouldBroadcast
     public function broadcastOn(): array
     {
         return [
-            new PrivateChannel('chat.' . $this->chat->id),
+            new Channel('chat.' . $this->chat->id),
         ];
     }
 

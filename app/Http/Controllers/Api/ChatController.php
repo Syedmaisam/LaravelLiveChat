@@ -47,14 +47,30 @@ class ChatController extends Controller
                 ->first();
         }
 
-        $chat = Chat::create([
-            'client_id' => $client->id,
-            'visitor_id' => $visitor->id,
-            'visitor_session_id' => $session?->id,
-            'status' => 'waiting',
-            'lead_form_filled' => true,
-            'started_at' => now(),
-        ]);
+        // Check if visitor already has an active/waiting chat (e.g., admin-initiated)
+        $existingChat = Chat::where('visitor_id', $visitor->id)
+            ->where('client_id', $client->id)
+            ->whereIn('status', ['waiting', 'active'])
+            ->first();
+
+        if ($existingChat) {
+            // Use existing chat (update visitor info and session if needed)
+            $chat = $existingChat;
+            if ($session && !$chat->visitor_session_id) {
+                $chat->update(['visitor_session_id' => $session->id]);
+            }
+            $chat->update(['lead_form_filled' => true]);
+        } else {
+            // Create new chat
+            $chat = Chat::create([
+                'client_id' => $client->id,
+                'visitor_id' => $visitor->id,
+                'visitor_session_id' => $session?->id,
+                'status' => 'waiting',
+                'lead_form_filled' => true,
+                'started_at' => now(),
+            ]);
+        }
 
         // If a message was included, create the first message
         if ($request->message) {
@@ -173,11 +189,21 @@ class ChatController extends Controller
 
         $perPage = 50;
         $messages = $chat->messages()
+            ->with('sender')
             ->orderBy('created_at', 'asc')
             ->paginate($perPage);
 
+        // Format messages to include sender_name
+        $formattedMessages = $messages->getCollection()->map(function ($message) {
+            $data = $message->toArray();
+            if ($message->sender_type === 'agent' && $message->sender) {
+                $data['sender_name'] = $message->sender->active_pseudo_name ?? $message->sender->name;
+            }
+            return $data;
+        });
+
         return response()->json([
-            'messages' => $messages->items(),
+            'messages' => $formattedMessages,
             'pagination' => [
                 'current_page' => $messages->currentPage(),
                 'last_page' => $messages->lastPage(),

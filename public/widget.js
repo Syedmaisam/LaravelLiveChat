@@ -642,11 +642,35 @@
     // Attach event listeners
     function attachEventListeners() {
         document.getElementById('details-form')?.addEventListener('submit', handleDetailsFormSubmit);
-        document.getElementById('message-input')?.addEventListener('keypress', (e) => {
+        
+        const messageInput = document.getElementById('message-input');
+        messageInput?.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
                 window.LiveChatWidget.sendMessage();
             }
         });
+        
+        // Send typing indicator with debounce
+        let typingTimeout = null;
+        messageInput?.addEventListener('input', () => {
+            if (!state.chatId || !config.visitorKey) return;
+            
+            // Clear previous timeout
+            if (typingTimeout) clearTimeout(typingTimeout);
+            
+            // Send typing indicator
+            fetch(`${config.apiUrl}/chat/${state.chatId}/typing`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ visitor_key: config.visitorKey }),
+            }).catch(() => {}); // Ignore errors
+            
+            // Don't send again for 2 seconds
+            typingTimeout = setTimeout(() => {
+                typingTimeout = null;
+            }, 2000);
+        });
+        
         document.getElementById('file-upload-btn')?.addEventListener('click', () => {
             document.getElementById('file-input')?.click();
         });
@@ -684,8 +708,9 @@
         .then(res => res.json())
         .then(data => {
             state.chatId = data.chat_id;
-            // Save chat ID to localStorage so we can resume
+            // Save chat ID and timestamp to localStorage so we can resume
             localStorage.setItem('live_chat_chat_id', data.chat_id);
+            localStorage.setItem('live_chat_session_timestamp', Date.now().toString());
             // Hide form, show messages
             document.getElementById('live-chat-details-form').style.display = 'none';
             document.getElementById('live-chat-messages').style.display = 'block';
@@ -701,6 +726,15 @@
         const submitted = localStorage.getItem('live_chat_details_submitted') === 'true';
         const savedDetails = localStorage.getItem('live_chat_visitor_details');
         const savedChatId = localStorage.getItem('live_chat_chat_id');
+        const savedTimestamp = localStorage.getItem('live_chat_session_timestamp');
+        
+        // Check if session has expired (24 hours)
+        const SESSION_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24 hours
+        if (savedTimestamp && (Date.now() - parseInt(savedTimestamp)) > SESSION_EXPIRY_MS) {
+            console.log('Session expired (24 hours), clearing localStorage');
+            clearSavedSession();
+            return;
+        }
         
         if (submitted && savedDetails) {
             state.hasSubmittedDetails = true;
@@ -720,13 +754,36 @@
         if (!state.chatId) return;
 
         fetch(`${config.apiUrl}/chat/${state.chatId}/messages?visitor_key=${config.visitorKey}`)
-            .then(res => res.json())
+            .then(res => {
+                if (res.status === 403 || res.status === 404) {
+                    // Session expired or chat deleted - clear localStorage and start fresh
+                    console.log('Session expired or chat not found, clearing localStorage');
+                    clearSavedSession();
+                    state.chatId = null;
+                    state.hasSubmittedDetails = false;
+                    renderMessages(); // Show welcome message
+                    throw new Error('Session expired');
+                }
+                return res.json();
+            })
             .then(data => {
                 // Messages now come from API in ascending order (oldest first)
                 state.messages = data.messages || [];
                 renderMessages();
             })
-            .catch(err => console.error('Load messages error:', err));
+            .catch(err => {
+                if (err.message !== 'Session expired') {
+                    console.error('Load messages error:', err);
+                }
+            });
+    }
+    
+    // Clear saved session from localStorage
+    function clearSavedSession() {
+        localStorage.removeItem('live_chat_details_submitted');
+        localStorage.removeItem('live_chat_visitor_details');
+        localStorage.removeItem('live_chat_chat_id');
+        localStorage.removeItem('live_chat_session_timestamp');
     }
 
     // Render messages
@@ -742,6 +799,11 @@
         } else {
             container.innerHTML = state.messages.map(msg => `
                 <div class="message ${msg.sender_type}">
+                    ${msg.sender_type === 'agent' && msg.sender_name ? `
+                        <div class="agent-name" style="font-size: 11px; color: #666; margin-bottom: 2px;">
+                            ${escapeHtml(msg.sender_name)}
+                        </div>
+                    ` : ''}
                     <div class="message-bubble">
                         ${msg.message_type === 'file' ? 
                             (msg.file_type && msg.file_type.startsWith('image/') ? 
@@ -1084,8 +1146,26 @@
     
     // Subscribe to visitor channel for proactive messages
     function subscribeToVisitorChannel() {
-        if (!state.pusher || !config.visitorKey) {
-            console.log('Cannot subscribe to visitor channel - no pusher or visitor key');
+        if (!config.visitorKey || !config.wsKey) {
+            console.log('Cannot subscribe to visitor channel - no visitor key or ws key');
+            return;
+        }
+        
+        // Create Pusher instance if not already exists
+        if (!state.pusher && window.Pusher) {
+            state.pusher = new Pusher(config.wsKey, {
+                wsHost: config.wsHost || window.location.hostname,
+                wsPort: config.wsPort || 8080,
+                wssPort: config.wsPort || 8080,
+                forceTLS: config.wsScheme === 'https',
+                enabledTransports: ['ws', 'wss'],
+                disableStats: true,
+                cluster: 'mt1'
+            });
+        }
+        
+        if (!state.pusher) {
+            console.log('Cannot subscribe to visitor channel - Pusher not available');
             return;
         }
         
@@ -1094,6 +1174,7 @@
         channel.bind('proactive.message', function(data) {
             console.log('Received proactive message:', data);
             showProactiveBubble(data.message, data.agent_name, data.agent_avatar);
+            playNotificationSound();
         });
         
         console.log('Subscribed to visitor channel:', config.visitorKey);
