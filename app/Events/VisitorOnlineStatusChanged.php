@@ -24,12 +24,13 @@ class VisitorOnlineStatusChanged implements ShouldBroadcastNow
         return [
             new Channel('visitors.' . $this->session->client_id),
             new Channel('monitoring'),
+            new Channel('visitor-session.' . $this->session->id), // For real-time chat view updates
         ];
     }
 
     public function broadcastAs(): string
     {
-        return 'visitor.status.changed';
+        return 'status.changed'; // Match what chat view listens for
     }
 
     public function broadcastWith(): array

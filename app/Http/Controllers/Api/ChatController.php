@@ -245,8 +245,14 @@ class ChatController extends Controller
         return response()->json([
             'message' => [
                 'id' => $message->id,
+                'chat_id' => $chat->id,
+                'sender_type' => 'visitor',
+                'message_type' => 'file',
+                'message' => null,
                 'file_name' => $message->file_name,
                 'file_size' => $message->file_size,
+                'file_type' => $message->file_type,
+                'file_url' => "/api/chat/{$chat->id}/file/{$message->id}/download",
                 'created_at' => $message->created_at->toIso8601String(),
             ],
         ]);

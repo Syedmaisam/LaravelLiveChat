@@ -240,6 +240,108 @@ function closePanel() {
     }, 300);
 }
 
+// Alert sound for new leads - Bell ringing
+function playAlertSound() {
+    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    
+    // Create bell sound with multiple tones
+    function playTone(frequency, startTime, duration) {
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+        
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+        
+        oscillator.frequency.value = frequency;
+        oscillator.type = 'sine';
+        
+        gainNode.gain.setValueAtTime(0.3, startTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, startTime + duration);
+        
+        oscillator.start(startTime);
+        oscillator.stop(startTime + duration);
+    }
+    
+    // Bell ring pattern: ding-ding-ding
+    const now = audioContext.currentTime;
+    playTone(800, now, 0.15);        // First ding
+    playTone(800, now + 0.2, 0.15);  // Second ding
+    playTone(800, now + 0.4, 0.2);   // Third ding (longer)
+}
+
+// Show in-page lead alert banner
+function showLeadAlert(data) {
+    const banner = document.createElement('div');
+    banner.className = 'fixed top-4 right-4 bg-gradient-to-r from-orange-500 to-red-500 text-white px-6 py-4 rounded-lg shadow-2xl animate-bounce';
+    banner.style.zIndex = '99999';
+    banner.innerHTML = `
+        <div class="flex items-center gap-3">
+            <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M10 2a6 6 0 00-6 6v3.586l-.707.707A1 1 0 004 14h12a1 1 0 00.707-1.707L16 11.586V8a6 6 0 00-6-6zM10 18a3 3 0 01-3-3h6a3 3 0 01-3 3z"/>
+            </svg>
+            <div>
+                <div class="font-bold">🔥 New Lead!</div>
+                <div class="text-sm">${data.visitor.name || 'Anonymous'} - ${data.visitor.location?.city || 'Unknown location'}</div>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(banner);
+    
+    setTimeout(() => {
+        banner.style.transition = 'opacity 0.5s';
+        banner.style.opacity = '0';
+        setTimeout(() => banner.remove(), 500);
+    }, 5000);
+}
+
+// Add visitor to list dynamically
+function addVisitorToList(data) {
+    const tbody = document.querySelector('table tbody');
+    if (!tbody) return;
+    
+    const row = document.createElement('tr');
+    row.className = 'border-b border-gray-700 hover:bg-gray-800 transition-colors cursor-pointer';
+    row.setAttribute('data-session-id', data.session?.id || '');
+    row.onclick = function() { showVisitorDetails(data.session?.id || 0); };
+    
+    const city = data.visitor.location?.city || '';
+    const country = data.visitor.location?.country || '';
+    const location = [city, country].filter(Boolean).join(', ') || 'Unknown';
+    const currentPage = data.visitor.current_page || '';
+    const pageDisplay = currentPage.length > 40 ? currentPage.substring(0, 40) + '...' : currentPage;
+    
+    row.innerHTML = `
+        <td class="px-6 py-4">
+            <span class="inline-block w-2 h-2 bg-green-500 rounded-full"></span>
+        </td>
+        <td class="px-6 py-4">
+            <div class="font-medium text-white">${data.visitor.name || 'Anonymous'}</div>
+            <div class="text-sm text-gray-400">${location}</div>
+        </td>
+        <td class="px-6 py-4 text-sm text-gray-300">${data.visitor.device || 'desktop'}</td>
+        <td class="px-6 py-4 text-sm">
+            <a href="${currentPage}" target="_blank" class="text-blue-400 hover:underline" onclick="event.stopPropagation();">
+                ${pageDisplay || 'Homepage'}
+            </a>
+        </td>
+        <td class="px-6 py-4 text-sm text-gray-300">Just now</td>
+        <td class="px-6 py-4 text-sm text-gray-300">0 pages</td>
+        <td class="px-6 py-4">
+            <button onclick="event.stopPropagation(); showVisitorDetails(${data.session?.id || 0});" class="text-blue-400 hover:text-blue-300">
+                View
+            </button>
+        </td>
+    `;
+    
+    // Add to top of list with highlight animation
+    tbody.insertBefore(row, tbody.firstChild);
+    row.style.backgroundColor = '#fbbf24';
+    setTimeout(() => {
+        row.style.transition = 'background-color 1s';
+        row.style.backgroundColor = '';
+    }, 100);
+}
+
 // Real-time WebSocket Updates
 document.addEventListener('DOMContentLoaded', function() {
     // Wait for Reverb client to be ready
@@ -248,35 +350,38 @@ document.addEventListener('DOMContentLoaded', function() {
             // Subscribe to monitoring channel for all visitor updates
             const monitoringChannel = window.reverbClient.subscribe('monitoring');
             
-            // New visitor joined
+            // New visitor joined - CRITICAL for sales agents
             monitoringChannel.bind('visitor.joined', function(data) {
-                console.log('New visitor:', data);
-                showNotification('New visitor on ' + (data.visitor.client_name || 'site'));
-                // Reload to show new visitor (or dynamically add row)
+                console.log('🔔 New visitor arrived:', data);
+                
+                // Play alert sound
+                playAlertSound();
+                
+                // Show browser notification
+                if (Notification.permission === 'granted') {
+                    new Notification('🔥 New Lead!', {
+                        body: `${data.visitor.name || 'Anonymous'} is browsing ${data.visitor.current_page || 'your site'}`,
+                        icon: '/favicon.ico',
+                        tag: 'new-visitor-' + data.session.id,
+                        requireInteraction: true
+                    });
+                }
+                
+                // Show in-page alert banner
+                showLeadAlert(data);
+                
+                // Reload page to show new visitor
                 if ('{{ $tab }}' === 'active') {
-                    location.reload();
+                    setTimeout(() => location.reload(), 1000);
                 }
             });
             
-            // Visitor status changed (online/offline)
-            monitoringChannel.bind('visitor.status.changed', function(data) {
+            // Visitor went offline - reload to update list
+            monitoringChannel.bind('status.changed', function(data) {
                 console.log('Visitor status changed:', data);
-                const row = document.querySelector(`[data-session-id="${data.session_id}"]`);
-                if (row) {
-                    const statusDot = row.querySelector('td:first-child span');
-                    if (statusDot) {
-                        if (data.is_online) {
-                            statusDot.classList.remove('bg-gray-500');
-                            statusDot.classList.add('bg-green-500');
-                        } else {
-                            statusDot.classList.remove('bg-green-500');
-                            statusDot.classList.add('bg-gray-500');
-                            // Move to history after a delay
-                            if ('{{ $tab }}' === 'active') {
-                                setTimeout(() => location.reload(), 2000);
-                            }
-                        }
-                    }
+                if (!data.is_online) {
+                    // Reload on both tabs so visitor moves from Active to History
+                    setTimeout(() => location.reload(), 1000);
                 }
             });
             

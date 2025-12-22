@@ -44,11 +44,26 @@ class Chat extends Model
     }
 
     /**
-     * Get the route key for the model.
+     * Use UUID for URL generation (security - non-enumerable)
      */
     public function getRouteKeyName()
     {
         return 'uuid';
+    }
+
+    /**
+     * Custom route model binding - accept both UUID and numeric ID
+     * Widget uses numeric ID, admin panel uses UUID
+     */
+    public function resolveRouteBinding($value, $field = null)
+    {
+        // If value is numeric, find by ID (for widget API)
+        if (is_numeric($value)) {
+            return $this->where('id', $value)->firstOrFail();
+        }
+        
+        // Otherwise, find by UUID (for admin panel)
+        return $this->where('uuid', $value)->firstOrFail();
     }
 
     public function client(): BelongsTo

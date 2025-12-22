@@ -33,16 +33,23 @@ class VisitorJoined implements ShouldBroadcast
 
     public function broadcastWith(): array
     {
+        $latestSession = $this->visitor->sessions()->latest()->first();
+        
         return [
             'visitor' => [
                 'id' => $this->visitor->id,
                 'name' => $this->visitor->name,
+                'email' => $this->visitor->email,
                 'client_id' => $this->visitor->client_id,
                 'device' => $this->visitor->device,
+                'current_page' => $latestSession?->current_page,
                 'location' => [
                     'country' => $this->visitor->country,
                     'city' => $this->visitor->city,
                 ],
+            ],
+            'session' => [
+                'id' => $latestSession?->id,
             ],
         ];
     }

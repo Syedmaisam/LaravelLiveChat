@@ -415,7 +415,7 @@
             }
         });
 
-        const chatId = '{{ $chat->uuid }}';
+        const chatId = {{ $chat->id }}; // Must use numeric ID to match broadcast channel
         const sessionId = {{ $chat->visitorSession?->id ?? 'null' }};
 
         // Subscribe to chat channel (public)

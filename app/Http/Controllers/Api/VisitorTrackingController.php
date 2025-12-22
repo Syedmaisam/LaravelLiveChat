@@ -281,11 +281,15 @@ class VisitorTrackingController extends Controller
      */
     public function markOffline(Request $request)
     {
+        \Log::info('🔴 markOffline called', ['data' => $request->all()]);
+        
         $request->validate([
             'session_key' => 'required|uuid',
         ]);
 
         $session = VisitorSession::where('session_key', $request->session_key)->first();
+        
+        \Log::info('Session lookup', ['found' => $session ? 'yes' : 'no', 'is_online' => $session?->is_online]);
 
         if ($session && $session->is_online) {
             $session->update([
@@ -293,6 +297,7 @@ class VisitorTrackingController extends Controller
                 'ended_at' => now(),
             ]);
             
+            \Log::info('✅ Session marked offline, broadcasting event');
             event(new VisitorOnlineStatusChanged($session, false));
         }
 

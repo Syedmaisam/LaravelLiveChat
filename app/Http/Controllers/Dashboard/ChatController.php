@@ -109,8 +109,14 @@ class ChatController extends Controller
         return response()->json([
             'message' => [
                 'id' => $message->id,
+                'chat_id' => $chat->id,
+                'sender_type' => 'agent',
+                'message_type' => 'file',
+                'message' => null,
                 'file_name' => $message->file_name,
                 'file_size' => $message->file_size,
+                'file_type' => $message->file_type,
+                'file_url' => "/dashboard/chat/{$chat->id}/file/{$message->id}/download",
                 'created_at' => $message->created_at->toIso8601String(),
             ],
         ]);
@@ -180,15 +186,21 @@ class ChatController extends Controller
         ]);
     }
 
-    public function downloadFile(Message $message)
+    public function downloadFile(Chat $chat, $messageId)
     {
         $user = Auth::user();
+        
+        // Find message manually - route binding fails with nested params
+        $message = Message::findOrFail($messageId);
 
         if ($message->message_type !== 'file' || !$message->file_path) {
             abort(404);
         }
 
-        $chat = $message->chat;
+        // Verify message belongs to this chat
+        if ($message->chat_id !== $chat->id) {
+            abort(404);
+        }
 
         // Verify agent has access
         if (!$user->clients()->where('clients.id', $chat->client_id)->exists()) {
