@@ -45,39 +45,7 @@
             </div>
         </div>
         <div class="flex items-center gap-3">
-            <!-- Nickname Selector -->
-            @php
-                $agentNickname = $chat->participants()->where('user_id', Auth::id())->first()?->pivot->agent_nickname;
-                $pseudoNames = Auth::user()->pseudo_names ?? [];
-            @endphp
-            @if(count($pseudoNames) > 0)
-            <div class="relative" x-data="{ open: false }">
-                <button @click="open = !open" class="flex items-center gap-2 px-3 py-1.5 bg-[#222] hover:bg-[#333] rounded-lg text-sm transition-colors">
-                    <svg class="w-4 h-4 text-[#fe9e00]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
-                    </svg>
-                    <span id="selected-nickname">{{ $agentNickname ?? 'Select Nickname' }}</span>
-                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-                    </svg>
-                </button>
-                
-                <div x-show="open" @click.away="open = false" x-transition 
-                     class="absolute right-0 mt-2 w-48 bg-[#1a1a1a] border border-[#333] rounded-lg shadow-xl py-1 z-50">
-                    @foreach($pseudoNames as $name)
-                    <button type="button" onclick="selectNickname('{{ $name }}')" 
-                            class="block w-full text-left px-4 py-2 text-sm hover:bg-[#222] {{ $agentNickname === $name ? 'text-[#fe9e00]' : 'text-gray-300' }}">
-                        {{ $name }}
-                        @if($agentNickname === $name)
-                        <svg class="w-3 h-3 inline ml-2" fill="currentColor" viewBox="0 0 20 20">
-                            <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
-                        </svg>
-                        @endif
-                    </button>
-                    @endforeach
-                </div>
-            </div>
-            @endif
+            <!-- Nickname Selector removed from header -->
             
             <span class="px-3 py-1 text-xs rounded-full {{ $chat->status === 'active' ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400' }}">
                 {{ ucfirst($chat->status) }}
@@ -281,6 +249,37 @@
                 </div>
 
                 <form id="message-form" class="flex gap-3">
+                    <!-- Nickname Selector -->
+                    @php
+                        $pseudoNames = Auth::user()->pseudo_names ?? [];
+                        $currentName = Auth::user()->active_pseudo_name ?? Auth::user()->name;
+                    @endphp
+                    @if(count($pseudoNames) > 0)
+                    <div class="relative shrink-0" x-data="{ open: false }">
+                        <button type="button" @click="open = !open" 
+                            class="flex items-center gap-2 h-full px-4 bg-[#222] border-[1.5px] border-[#333] hover:border-[#fe9e00] rounded-full text-sm transition-all text-[#fe9e00] font-medium group">
+                            <svg class="w-4 h-4 text-gray-500 group-hover:text-[#fe9e00] transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+                            </svg>
+                            <span id="selected-nickname">{{ $currentName }}</span>
+                            <svg class="w-3 h-3 text-gray-500 group-hover:text-[#fe9e00] transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                            </svg>
+                        </button>
+                        
+                        <div x-show="open" @click.away="open = false" x-transition 
+                             class="absolute bottom-full left-0 mb-2 w-48 bg-[#1a1a1a] border border-[#333] rounded-lg shadow-xl py-1 z-50">
+                            <div class="px-4 py-2 text-[10px] text-gray-500 font-bold uppercase tracking-wider">Switch Profile</div>
+                            @foreach($pseudoNames as $name)
+                            <button type="button" onclick="selectNickname('{{ $name }}')" 
+                                    class="block w-full text-left px-4 py-2 text-sm hover:bg-[#222] text-gray-300 hover:text-[#fe9e00] flex items-center justify-between group">
+                                <span>{{ $name }}</span>
+                                <span class="opacity-0 group-hover:opacity-100 text-[#fe9e00] text-xs transition-opacity">Select</span>
+                            </button>
+                            @endforeach
+                        </div>
+                    </div>
+                    @endif
                     <input type="text" id="message-input" placeholder="Type a message... (type / for quick replies)" 
                         class="flex-1 bg-[#222] border border-[#333] rounded-full px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-[#fe9e00]">
                     <button type="button" id="attach-btn" class="p-2 text-gray-400 hover:text-[#fe9e00]">

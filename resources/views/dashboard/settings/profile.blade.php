@@ -43,9 +43,36 @@
             <div class="bg-[#1A1A1A] rounded-xl border border-[#2A2A2A] p-5" x-data="{
                 names: {{ json_encode($user->pseudo_names ?? []) }},
                 activeName: '{{ $user->active_pseudo_name ?? '' }}',
-                addName() { if (this.names.length < 5) this.names.push(''); },
-                removeName(i) { this.names.splice(i, 1); }
-            }">
+                activeIndex: null,
+                init() {
+                    // Find index of active name, default to 0 if exists but not found
+                    this.activeIndex = this.names.indexOf(this.activeName);
+                    if (this.activeIndex === -1 && this.names.length > 0) this.activeIndex = 0;
+                    
+                    // Watch for changes to ensure activeName input stays synced
+                    this.$watch('activeIndex', val => {
+                        if (val !== null && this.names[val]) {
+                            this.activeName = this.names[val];
+                        }
+                    });
+                },
+                addName() { 
+                    if (this.names.length < 5) {
+                        this.names.push('');
+                        // If this is the first name, make it active
+                        if (this.names.length === 1) this.activeIndex = 0;
+                    } 
+                },
+                removeName(i) { 
+                    this.names.splice(i, 1);
+                    // Adjust active index if needed
+                    if (this.activeIndex === i) {
+                        this.activeIndex = this.names.length > 0 ? 0 : null;
+                    } else if (this.activeIndex > i) {
+                        this.activeIndex--;
+                    }
+                }
+            }" x-init="init()">
                 <div class="flex items-center justify-between mb-4">
                     <div>
                         <h3 class="text-sm font-semibold text-white">Display Names</h3>
@@ -60,15 +87,21 @@
                     </button>
                 </div>
 
+                <!-- Hidden input for the actual active name value -->
+                <input type="hidden" name="active_pseudo_name" :value="names[activeIndex] || ''">
+
                 <div class="space-y-2">
                     <template x-for="(name, index) in names" :key="index">
                         <div class="flex items-center space-x-2">
-                            <input type="text" :name="`pseudo_names[${index}]`" x-model="names[index]" placeholder="Display name..."
+                            <input type="text" :name="`pseudo_names[${index}]`" x-model="names[index]" placeholder="Display name..." required
                                 class="flex-1 bg-[#252525] border border-[#333] rounded-lg px-3 py-2 text-sm text-white focus:ring-1 focus:ring-[#D4AF37] focus:border-[#D4AF37]">
-                            <label class="flex items-center space-x-1.5 px-3 py-2 bg-[#252525] rounded-lg cursor-pointer hover:bg-[#333] transition-colors">
-                                <input type="radio" name="active_pseudo_name" :value="names[index]" x-model="activeName" class="text-[#D4AF37] focus:ring-[#D4AF37]">
-                                <span class="text-xs text-gray-400">Active</span>
+                            
+                            <label class="flex items-center space-x-1.5 px-3 py-2 bg-[#252525] rounded-lg cursor-pointer hover:bg-[#333] transition-colors"
+                                :class="{'ring-1 ring-[#D4AF37] bg-[#333]': activeIndex === index}">
+                                <input type="radio" name="pseudo_name_selection" :value="index" x-model="activeIndex" class="text-[#D4AF37] focus:ring-[#D4AF37]">
+                                <span class="text-xs text-gray-400" :class="{'text-[#D4AF37] font-medium': activeIndex === index}">Active</span>
                             </label>
+                            
                             <button type="button" @click="removeName(index)" class="p-2 text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>

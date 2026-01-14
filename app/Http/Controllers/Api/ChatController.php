@@ -521,6 +521,9 @@ class ChatController extends Controller
 
         $user = $request->user();
 
+        // Update global active pseudo name
+        $user->update(['active_pseudo_name' => $validated['nickname']]);
+
         // Update or attach participant with nickname
         $chat->participants()->syncWithoutDetaching([
             $user->id => ['agent_nickname' => $validated['nickname']]

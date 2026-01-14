@@ -74,7 +74,7 @@ class ChatController extends Controller
             'message' => [
                 'id' => $message->id,
                 'message' => $message->message,
-                'sender_name' => $user->pseudo_name ?? $user->name,
+                'sender_name' => $user->active_pseudo_name ?? $user->name,
                 'created_at' => $message->created_at->toIso8601String(),
             ],
         ]);
