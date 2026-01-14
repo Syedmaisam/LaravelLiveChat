@@ -139,6 +139,127 @@
         </main>
     </div>
 
+    <script>
+        // Check for Reverb client availability and subscribe
+        const checkReverbInterval = setInterval(() => {
+            if (window.reverbClient) {
+                clearInterval(checkReverbInterval);
+                console.log('Reverb client found, subscribing to notifications...');
+                
+                // Request notification permission
+                if ('Notification' in window && Notification.permission === 'default') {
+                    Notification.requestPermission();
+                }
+                
+                // Subscribe to monitoring channel for new visitors
+                const monitoringChannel = window.reverbClient.subscribe('monitoring');
+                monitoringChannel.bind('visitor.status.changed', function(data) {
+                    if (data.is_online) {
+                        showNotification('Visitor Online', 'A visitor is now online', '{{ route("admin.visitors.index") }}');
+                    }
+                });
+                monitoringChannel.bind('visitor.joined', function(data) {
+                    showNotification(
+                        'New Visitor 🔔', 
+                        `New visitor from ${data.visitor.location.country || 'Unknown'}`, 
+                        '{{ route("admin.visitors.index") }}?session=' + (data.session ? data.session.id : '')
+                    );
+                });
+
+                // Subscribe to agent private channel for notifications
+                @auth
+                const userId = {{ Auth::id() }};
+                console.log('Subscribing to private-agent.' + userId);
+                const agentChannel = window.reverbClient.subscribe('private-agent.' + userId);
+                
+                agentChannel.bind('pusher:subscription_succeeded', function() {
+                    console.log('Successfully subscribed to agent notification channel');
+                });
+                
+                agentChannel.bind('agent.notification', function(data) {
+                    console.log('Agent notification received:', data);
+                    showNotification(data.title, data.body, data.url);
+                });
+                @endauth
+                
+                // Helper functions
+                window.showNotification = function(title, body, url) {
+                    // Play notification sound
+                    playNotificationSound();
+                    
+                    // Show browser notification if permitted
+                    if ('Notification' in window && Notification.permission === 'granted') {
+                        const notification = new Notification(title, {
+                            body: body,
+                            icon: '/favicon.ico',
+                            badge: '/favicon.ico',
+                            tag: 'visiontech-chat',
+                        });
+                        
+                        notification.onclick = function() {
+                            window.focus();
+                            if (url) window.location.href = url;
+                            notification.close();
+                        };
+                        
+                        setTimeout(() => notification.close(), 5000);
+                    }
+                    
+                    // Also show in-page toast
+                    showToast(title, body);
+                };
+                
+                window.playNotificationSound = function() {
+                    try {
+                        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                        const playTone = (freq, startTime, duration) => {
+                            const oscillator = audioContext.createOscillator();
+                            const gainNode = audioContext.createGain();
+                            oscillator.connect(gainNode);
+                            gainNode.connect(audioContext.destination);
+                            oscillator.frequency.value = freq;
+                            oscillator.type = 'sine';
+                            gainNode.gain.setValueAtTime(0, audioContext.currentTime + startTime);
+                            gainNode.gain.linearRampToValueAtTime(0.15, audioContext.currentTime + startTime + 0.02);
+                            gainNode.gain.setValueAtTime(0.15, audioContext.currentTime + startTime + duration - 0.02);
+                            gainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime + startTime + duration);
+                            oscillator.start(audioContext.currentTime + startTime);
+                            oscillator.stop(audioContext.currentTime + startTime + duration);
+                        };
+                        playTone(880, 0, 0.12);
+                        playTone(1318.5, 0.12, 0.15);
+                    } catch (e) {
+                        console.log('Could not play notification sound:', e);
+                    }
+                };
+                
+                window.showToast = function(title, body) {
+                    const toast = document.createElement('div');
+                    toast.className = 'fixed bottom-4 right-4 bg-[#1a1a1a] border border-[#333] rounded-lg shadow-xl p-4 max-w-sm z-50 animate-slide-up';
+                    toast.innerHTML = `
+                        <div class="flex items-start gap-3">
+                            <div class="w-10 h-10 bg-[#fe9e00] rounded-full flex items-center justify-center text-black flex-shrink-0">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/>
+                                </svg>
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <p class="font-semibold text-white text-sm">${title}</p>
+                                <p class="text-gray-400 text-xs mt-0.5 truncate">${body}</p>
+                            </div>
+                            <button onclick="this.parentElement.parentElement.remove()" class="text-gray-500 hover:text-white">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                                </svg>
+                            </button>
+                        </div>
+                    `;
+                    document.body.appendChild(toast);
+                    setTimeout(() => toast.remove(), 5000);
+                };
+            }
+        }, 300);
+    </script>
     @stack('scripts')
 </body>
 </html>

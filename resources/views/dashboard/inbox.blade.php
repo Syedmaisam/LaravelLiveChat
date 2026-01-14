@@ -474,6 +474,29 @@
             }
         });
 
+        // Request notification permission if default
+        if ('Notification' in window && Notification.permission === 'default') {
+            Notification.requestPermission();
+        }
+
+        // Subscribe to monitoring channel for new visitors (Unified with Admin Dashboard)
+        const monitoringChannel = pusher.subscribe('monitoring');
+        monitoringChannel.bind('visitor.joined', function(data) {
+             console.log('New visitor joined:', data);
+             playNotificationSound();
+             if ('Notification' in window && Notification.permission === 'granted') {
+                 const notification = new Notification('New Visitor 🔔', {
+                     body: `New visitor from ${data.visitor.location.country || 'Unknown'}`,
+                     icon: '/favicon.ico',
+                     tag: 'new-visitor-' + (data.session ? data.session.id : Date.now())
+                 });
+                 notification.onclick = function() {
+                     window.focus();
+                     window.location.href = '{{ route("admin.visitors.index") }}?session=' + (data.session ? data.session.id : '');
+                 };
+             }
+        });
+
         @if(isset($chat) && $chat)
         const chatId = {{ $chat->id }}; // Must use numeric ID to match broadcast channel
         const sessionId = {{ $chat->visitorSession?->id ?? 'null' }};

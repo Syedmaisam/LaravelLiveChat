@@ -1019,14 +1019,32 @@
     function renderMessages() {
         const container = document.getElementById('messages-container');
         
-        if (state.messages.length === 0) {
+        // Safe State Isolation: Merge proactive message if exists
+        // This ensures the proactive message is always shown, even if checkExistingChat 
+        // overwrites state.messages with empty server history
+        let messagesToRender = [...state.messages];
+        if (state.proactiveMessage) {
+            // Deduplicate: Don't add if already in messages
+            const exists = messagesToRender.some(m => 
+                m.id === state.proactiveMessage.id || 
+                (m.message === state.proactiveMessage.message && m.sender_type === 'agent')
+            );
+            if (!exists) {
+                messagesToRender.push(state.proactiveMessage);
+            }
+        }
+        
+        // Sort by time
+        messagesToRender.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+        
+        if (messagesToRender.length === 0) {
             container.innerHTML = `
                 <div class="welcome-message">
                     <p>Welcome! How can we help you today?</p>
                 </div>
             `;
         } else {
-            container.innerHTML = state.messages.map(msg => {
+            container.innerHTML = messagesToRender.map(msg => {
                 // Determine message state styles
                 const isSending = msg._sending;
                 const isFailed = msg._failed;
@@ -1614,6 +1632,10 @@
                 created_at: data.timestamp || new Date().toISOString()
             };
             
+            // Safe State Isolation: Store in separate state variable
+            // This protects the message from being overwritten by server sync logic
+            state.proactiveMessage = msgObj;
+            
             state.messages.push(msgObj);
             
             // If chat is OPEN, update UI immediately
@@ -1632,10 +1654,14 @@
                    if (container) container.scrollTop = container.scrollHeight;
                }
                if (footer) footer.style.display = 'flex';
+               
+               // Play simple sound but DON'T show toast bubble (duplication)
+               playNotificationSound();
+            } else {
+               // Chat is closed, show toast bubble
+               showProactiveBubble(data.message, data.agent_name, data.agent_avatar);
+               playNotificationSound();
             }
-
-            showProactiveBubble(data.message, data.agent_name, data.agent_avatar);
-            playNotificationSound();
         });
         
         console.log('Subscribed to visitor channel:', config.visitorKey);
