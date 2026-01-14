@@ -71,8 +71,14 @@
 
             <!-- Center Nav -->
             <nav class="hidden md:flex items-center space-x-1">
+                @if(Auth::user()->isAdmin())
+                <a href="{{ route('admin.dashboard') }}" class="px-4 py-2 rounded-lg text-sm font-medium transition-all text-gray-400 hover:text-white hover:bg-white/5">
+                    Dashboard
+                </a>
+                @endif
+
                 <a href="{{ route('dashboard') }}" class="px-4 py-2 rounded-lg text-sm font-medium transition-all {{ request()->routeIs('dashboard') && !request()->routeIs('dashboard.monitoring') && !request()->routeIs('dashboard.reporting') ? 'bg-[#D4AF37]/10 text-[#D4AF37]' : 'text-gray-400 hover:text-white hover:bg-white/5' }}">
-                    Inbox
+                    Live Chat
                 </a>
                 <a href="{{ route('dashboard.monitoring') }}" class="px-4 py-2 rounded-lg text-sm font-medium transition-all {{ request()->routeIs('dashboard.monitoring') ? 'bg-[#D4AF37]/10 text-[#D4AF37]' : 'text-gray-400 hover:text-white hover:bg-white/5' }}">
                     Visitors

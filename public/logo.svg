@@ -1,0 +1,11 @@
+<svg width="180" height="40" viewBox="0 0 180 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <!-- Icon Background -->
+    <rect x="0" y="0" width="40" height="40" rx="12" fill="#fe9e00" fill-opacity="0.1"/>
+    
+    <!-- Stylized V/Chat Icon -->
+    <path d="M20 10L12 24H28L20 10Z" fill="#fe9e00"/>
+    <path d="M20 28C21.1046 28 22 27.1046 22 26C22 24.8954 21.1046 24 20 24C18.8954 24 18 24.8954 18 26C18 27.1046 18.8954 28 20 28Z" fill="#fe9e00"/>
+    
+    <!-- Text -->
+    <text x="50" y="27" font-family="system-ui, -apple-system, sans-serif" font-weight="800" font-size="22" fill="#ffffff" letter-spacing="-0.5">VisionTech</text>
+</svg>

@@ -6,9 +6,7 @@ use App\Http\Controllers\ClientController;
 use App\Http\Controllers\DashboardController;
 use Illuminate\Support\Facades\Route;
 
-Route::get('/', function () {
-    return view('welcome');
-});
+Route::redirect('/', '/demo');
 
 Route::get('/demo', function () {
     return view('demo');
@@ -36,7 +34,7 @@ Route::post('/logout', [LoginController::class, 'logout'])->name('logout')->midd
 
 // Dashboard routes (protected)
 Route::middleware('auth')->group(function () {
-    Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+    Route::get('/live-chat', [DashboardController::class, 'index'])->name('dashboard');
     Route::get('/dashboard/monitoring', [DashboardController::class, 'monitoring'])->name('dashboard.monitoring');
     Route::get('/dashboard/chat/{chat}', [DashboardController::class, 'chat'])->name('dashboard.chat');
     Route::get('/inbox/{chat}', [DashboardController::class, 'inbox'])->name('inbox.chat');

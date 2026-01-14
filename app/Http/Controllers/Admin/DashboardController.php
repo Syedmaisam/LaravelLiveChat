@@ -16,6 +16,7 @@ class DashboardController extends Controller
             'users' => User::count(),
             'clients' => Client::where('is_active', true)->count(),
             'chats' => Chat::count(),
+            'active_chats' => Chat::where('status', 'active')->count(),
             'online' => VisitorSession::where('is_online', true)->count(),
         ];
 

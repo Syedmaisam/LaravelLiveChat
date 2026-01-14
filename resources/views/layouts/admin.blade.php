@@ -204,7 +204,9 @@
                class="w-56 bg-[#111] border-r border-[#222] flex flex-col fixed h-full z-50 transition-transform duration-300 ease-in-out">
             <!-- Logo with Close Button -->
             <div class="h-14 flex items-center justify-between px-4 border-b border-[#222]">
-                <span class="text-[#fe9e00] font-bold text-lg">VisionTech</span>
+                <a href="{{ route('admin.dashboard') }}" class="block transition-opacity hover:opacity-80">
+                    <img src="{{ asset('logo.svg') }}" alt="{{ config('app.name') }}" class="h-8">
+                </a>
                 <button @click="sidebarOpen = false" class="lg:hidden text-gray-400 hover:text-white">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>

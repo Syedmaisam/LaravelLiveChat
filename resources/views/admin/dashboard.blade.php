@@ -3,7 +3,7 @@
 @section('title', 'Dashboard')
 
 @section('content')
-<div class="grid grid-cols-4 gap-4 mb-8">
+<div class="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
     <div class="bg-[#111] border border-[#222] rounded-lg p-5">
         <div class="text-2xl font-bold text-[#fe9e00]">{{ $stats['users'] ?? 0 }}</div>
         <div class="text-sm text-gray-500 mt-1">Total Users</div>
@@ -17,8 +17,57 @@
         <div class="text-sm text-gray-500 mt-1">Total Chats</div>
     </div>
     <div class="bg-[#111] border border-[#222] rounded-lg p-5">
+        <div class="text-2xl font-bold text-[#fe9e00]">{{ $stats['active_chats'] ?? 0 }}</div>
+        <div class="text-sm text-gray-500 mt-1">Active Chats</div>
+    </div>
+    <div class="bg-[#111] border border-[#222] rounded-lg p-5">
         <div class="text-2xl font-bold text-[#fe9e00]">{{ $stats['online'] ?? 0 }}</div>
         <div class="text-sm text-gray-500 mt-1">Online Visitors</div>
+    </div>
+</div>
+
+</div>
+
+<!-- Quick Actions -->
+<div class="mb-8">
+    <h3 class="font-semibold mb-4 text-gray-400 uppercase text-xs tracking-wider">Quick Actions</h3>
+    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        <a href="{{ route('admin.users.index') }}" class="bg-[#111] border border-[#222] p-4 rounded-lg hover:border-[#fe9e00] transition-all hover:-translate-y-1 group">
+            <div class="text-[#fe9e00] mb-3 group-hover:scale-110 transition-transform">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
+            </div>
+            <div class="text-sm font-medium">Users</div>
+        </a>
+        <a href="{{ route('admin.clients.index') }}" class="bg-[#111] border border-[#222] p-4 rounded-lg hover:border-[#fe9e00] transition-all hover:-translate-y-1 group">
+             <div class="text-[#fe9e00] mb-3 group-hover:scale-110 transition-transform">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
+            </div>
+            <div class="text-sm font-medium">Clients</div>
+        </a>
+         <a href="{{ route('admin.visitors.index') }}" class="bg-[#111] border border-[#222] p-4 rounded-lg hover:border-[#fe9e00] transition-all hover:-translate-y-1 group">
+             <div class="text-[#fe9e00] mb-3 group-hover:scale-110 transition-transform">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+            </div>
+            <div class="text-sm font-medium">Visitors</div>
+        </a>
+         <a href="{{ route('admin.auto-greetings.index') }}" class="bg-[#111] border border-[#222] p-4 rounded-lg hover:border-[#fe9e00] transition-all hover:-translate-y-1 group">
+             <div class="text-[#fe9e00] mb-3 group-hover:scale-110 transition-transform">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" /></svg>
+            </div>
+            <div class="text-sm font-medium">Auto Greetings</div>
+        </a>
+        <a href="{{ route('admin.roles.index') }}" class="bg-[#111] border border-[#222] p-4 rounded-lg hover:border-[#fe9e00] transition-all hover:-translate-y-1 group">
+             <div class="text-[#fe9e00] mb-3 group-hover:scale-110 transition-transform">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+            </div>
+            <div class="text-sm font-medium">Roles</div>
+        </a>
+        <a href="{{ route('admin.permissions.index') }}" class="bg-[#111] border border-[#222] p-4 rounded-lg hover:border-[#fe9e00] transition-all hover:-translate-y-1 group">
+             <div class="text-[#fe9e00] mb-3 group-hover:scale-110 transition-transform">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            </div>
+            <div class="text-sm font-medium">Permissions</div>
+        </a>
     </div>
 </div>
 

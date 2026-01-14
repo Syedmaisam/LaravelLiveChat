@@ -8,7 +8,7 @@
     <meta name="reverb-host" content="{{ config('broadcasting.connections.reverb.options.host') }}">
     <meta name="reverb-port" content="{{ config('broadcasting.connections.reverb.options.port') }}">
     <meta name="reverb-scheme" content="{{ config('broadcasting.connections.reverb.options.scheme') }}">
-    <title>Chat #{{ $chat->id }} - {{ $chat->visitor->name ?? 'Anonymous' }}</title>
+    <title>{{ isset($chat) && $chat ? "Chat #{$chat->id} - " . ($chat->visitor->name ?? 'Anonymous') : 'Live Chat' }}</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://js.pusher.com/8.2.0/pusher.min.js"></script>
@@ -22,11 +22,13 @@
     <!-- Top Header -->
     <header class="bg-[#111] border-b border-[#222] px-4 py-3 flex items-center justify-between shrink-0">
         <div class="flex items-center gap-4">
-            <a href="{{ route('dashboard') }}" class="text-gray-400 hover:text-white">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <a href="{{ route('admin.dashboard') }}" class="flex items-center gap-2 text-gray-400 hover:text-white mr-4 group" title="Back to Admin Dashboard">
+                <svg class="w-6 h-6 group-hover:-translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
                 </svg>
+                <img src="{{ asset('logo.svg') }}" alt="{{ config('app.name') }}" class="h-8 hidden md:block">
             </a>
+            @if(isset($chat) && $chat)
             <div class="flex items-center gap-3">
                 <div class="w-10 h-10 bg-[#fe9e00]/20 rounded-full flex items-center justify-center">
                     <span class="text-[#fe9e00] font-semibold text-sm">{{ strtoupper(substr($chat->visitor->name ?? 'A', 0, 2)) }}</span>
@@ -43,13 +45,26 @@
                     </p>
                 </div>
             </div>
+            @else
+            <div class="flex items-center gap-3">
+                 <div class="w-10 h-10 bg-[#fe9e00]/20 rounded-full flex items-center justify-center">
+                    <svg class="w-5 h-5 text-[#fe9e00]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                    </svg>
+                </div>
+                <div>
+                    <h1 class="font-semibold">Live Chat</h1>
+                    <p class="text-xs text-gray-500">Select a conversation</p>
+                </div>
+            </div>
+            @endif
         </div>
         <div class="flex items-center gap-3">
-            <!-- Nickname Selector removed from header -->
-            
+            @if(isset($chat) && $chat)
             <span class="px-3 py-1 text-xs rounded-full {{ $chat->status === 'active' ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400' }}">
                 {{ ucfirst($chat->status) }}
             </span>
+            @endif
             
             <!-- User Menu -->
             <div class="relative" x-data="{ open: false }">
@@ -88,6 +103,37 @@
     <div class="flex-1 flex overflow-hidden">
         <!-- Left Sidebar -->
         <div class="w-80 border-r border-[#222] bg-[#111] flex flex-col shrink-0">
+            <!-- Search & Filters -->
+            <div class="p-3 border-b border-[#222]">
+                <form action="{{ url()->current() }}" method="GET" id="search-form" class="space-y-2">
+                    <div class="relative">
+                        <input type="text" name="search" value="{{ request('search') }}" placeholder="Search name, phone..." 
+                            class="w-full bg-[#222] border border-[#333] rounded-lg pl-8 pr-3 py-1.5 text-sm text-white placeholder-gray-600 focus:border-[#fe9e00] focus:outline-none focus:ring-1 focus:ring-[#fe9e00]">
+                        <svg class="w-4 h-4 text-gray-500 absolute left-2.5 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                        </svg>
+                    </div>
+                    <div class="flex gap-2">
+                         <select name="client_id" onchange="this.form.submit()" class="flex-1 min-w-0 bg-[#222] border border-[#333] rounded-lg px-2 py-1.5 text-xs text-gray-300 focus:border-[#fe9e00] focus:outline-none">
+                             <option value="">All Clients</option>
+                             @foreach($clients as $client)
+                                 <option value="{{ $client->id }}" {{ request('client_id') == $client->id ? 'selected' : '' }}>
+                                     {{ \Str::limit($client->name, 12) }} ({{ $client->chats_count }})
+                                 </option>
+                             @endforeach
+                         </select>
+                         <select name="country" onchange="this.form.submit()" class="w-24 bg-[#222] border border-[#333] rounded-lg px-2 py-1.5 text-xs text-gray-300 focus:border-[#fe9e00] focus:outline-none">
+                             <option value="">Country</option>
+                             @foreach($countries as $country)
+                                 <option value="{{ $country->country_code }}" {{ request('country') == $country->country_code ? 'selected' : '' }}>
+                                     {{ $country->country_code }} ({{ $country->total }})
+                                 </option>
+                             @endforeach
+                         </select>
+                    </div>
+                </form>
+            </div>
+
             <!-- Tabs -->
             <div class="flex border-b border-[#222]">
                 <button onclick="switchTab('active')" id="tab-active" class="flex-1 px-4 py-3 text-sm font-medium border-b-2 border-[#fe9e00] text-[#fe9e00]">
@@ -103,7 +149,7 @@
                 @forelse($activeVisitors as $session)
                     @php 
                         $visitorChat = $session->chats->first();
-                        $isCurrentChat = $visitorChat && $visitorChat->id === $chat->id;
+                        $isCurrentChat = isset($chat) && $visitorChat && $visitorChat->id === $chat->id;
                     @endphp
                     @if($visitorChat)
                         {{-- Visitor has a chat - link to it --}}
@@ -153,7 +199,7 @@
             <div id="list-all" class="flex-1 overflow-y-auto hidden">
                 @forelse($recentChats as $recentChat)
                 <a href="{{ route('inbox.chat', $recentChat) }}" 
-                   class="block p-4 border-b border-[#222] hover:bg-[#1a1a1a] {{ $recentChat->id === $chat->id ? 'bg-[#1a1a1a]' : '' }}">
+                   class="block p-4 border-b border-[#222] hover:bg-[#1a1a1a] {{ isset($chat) && $recentChat->id === $chat->id ? 'bg-[#1a1a1a]' : '' }}">
                     <div class="flex items-start gap-3">
                         <div class="w-10 h-10 bg-[#fe9e00]/20 rounded-full flex items-center justify-center shrink-0">
                             <span class="text-[#fe9e00] font-semibold text-sm">{{ strtoupper(substr($recentChat->visitor->name ?? 'A', 0, 2)) }}</span>
@@ -182,6 +228,7 @@
 
         <!-- Chat Area (Center) -->
         <div class="flex-1 flex flex-col">
+            @if(isset($chat) && $chat)
             <!-- Messages -->
             <div class="flex-1 overflow-y-auto p-4 messages-container" id="messages-container">
                 @foreach($messages as $message)
@@ -293,8 +340,20 @@
                     <input type="file" id="file-input" style="display: none;" accept="image/*,.pdf,.doc,.docx">
                 </form>
             </div>
+            @else
+                <div class="flex-1 flex flex-col items-center justify-center text-gray-500">
+                    <div class="w-20 h-20 bg-[#fe9e00]/10 rounded-full flex items-center justify-center mb-6">
+                        <svg class="w-10 h-10 text-[#fe9e00]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                        </svg>
+                    </div>
+                    <h2 class="text-xl font-semibold text-white mb-2">Select a Conversation</h2>
+                    <p class="max-w-md text-center">Refer to the sidebar to choose an active visitor or a recent chat to start messaging.</p>
+                </div>
+            @endif
         </div>
 
+    @if(isset($chat) && $chat)
         <!-- Visitor Details Panel (Right) -->
         <div class="w-80 border-l border-[#222] bg-[#111] overflow-y-auto shrink-0">
             <!-- Visitor Details -->
@@ -380,6 +439,7 @@
                 </div>
             </div>
         </div>
+    @endif
     </div>
 
     <script>
@@ -414,6 +474,7 @@
             }
         });
 
+        @if(isset($chat) && $chat)
         const chatId = {{ $chat->id }}; // Must use numeric ID to match broadcast channel
         const sessionId = {{ $chat->visitorSession?->id ?? 'null' }};
 
@@ -481,6 +542,7 @@
                 updateCurrentPage(data.page_url, data.page_title);
             });
         }
+        @endif
 
         function addMessage(msg) {
             console.log('Adding message:', msg);
@@ -708,6 +770,7 @@
             }
         }
 
+        @if(isset($chat) && $chat)
         // Canned Responses
         let cannedResponses = [];
         let selectedCannedIndex = -1;
@@ -859,6 +922,7 @@
             })
             .catch(err => console.error('Nickname update error:', err));
         }
+        @endif
     </script>
 </body>
 </html>

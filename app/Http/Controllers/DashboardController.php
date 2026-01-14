@@ -8,6 +8,7 @@ use App\Models\Visitor;
 use App\Models\VisitorSession;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class DashboardController extends Controller
 {
@@ -15,13 +16,39 @@ class DashboardController extends Controller
     {
         $user = Auth::user();
         $clientIds = $user->clients()->pluck('clients.id');
+        $request = request();
 
-        // All chats for sidebar (ordered by last activity)
-        $allChats = Chat::whereIn('client_id', $clientIds)
+        // Base query for sidebar chats
+        $query = Chat::whereIn('client_id', $clientIds)
             ->with(['visitor', 'client', 'visitorSession', 'messages' => function ($q) {
                 $q->orderBy('created_at', 'desc')->limit(1);
-            }])
-            ->orderByRaw("CASE WHEN status = 'waiting' THEN 0 WHEN status = 'active' THEN 1 ELSE 2 END")
+            }]);
+
+        // Apply Search
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->whereHas('visitor', function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                  ->orWhere('email', 'like', "%{$search}%")
+                  ->orWhere('phone', 'like', "%{$search}%");
+            });
+        }
+
+        // Apply Client Filter
+        if ($request->filled('client_id')) {
+            $query->where('client_id', $request->client_id);
+        }
+
+        // Apply Country Filter
+        if ($request->filled('country')) {
+            $country = $request->country;
+            $query->whereHas('visitor', function ($q) use ($country) {
+                $q->where('country_code', $country);
+            });
+        }
+
+        // All chats for sidebar (ordered by last activity)
+        $allChats = $query->orderByRaw("CASE WHEN status = 'waiting' THEN 0 WHEN status = 'active' THEN 1 ELSE 2 END")
             ->orderByDesc('last_message_at')
             ->orderByDesc('updated_at')
             ->get()
@@ -40,6 +67,7 @@ class DashboardController extends Controller
                     'last_message_at' => $chat->last_message_at ?? $chat->updated_at,
                     'is_online' => $chat->visitorSession?->is_online ?? false,
                     'started_at' => $chat->started_at,
+                    'country_code' => $chat->visitor->country_code ?? null,
                 ];
             });
 
@@ -59,30 +87,103 @@ class DashboardController extends Controller
             }])
             ->orderBy('updated_at', 'desc')
             ->get();
+
+        // Get Available Clients with Chat Counts
+        $clients = Client::whereIn('id', $clientIds)
+            ->withCount('chats')
+            ->get();
+
+        // Get Available Countries with Chat Counts
+        $countries = Chat::whereIn('chats.client_id', $clientIds)
+            ->join('visitors', 'chats.visitor_id', '=', 'visitors.id')
+            ->whereNotNull('visitors.country_code')
+            ->select('visitors.country_code', 'visitors.country', DB::raw('count(chats.id) as total'))
+            ->groupBy('visitors.country_code', 'visitors.country')
+            ->orderByDesc('total')
+            ->get();
             
-        return compact('waitingChats', 'activeChats', 'clientIds', 'allChats');
+        return compact('waitingChats', 'activeChats', 'clientIds', 'allChats', 'countries', 'clients');
     }
 
     public function index(Request $request)
     {
         $user = Auth::user();
-        $data = $this->getCommonData();
-        
-        $clientIds = $data['clientIds'];
-        $onlineVisitors = VisitorSession::whereIn('client_id', $clientIds)
+        $clientIds = $user->clients()->pluck('clients.id');
+
+        // Active visitors (all online sessions, with or without chats)
+        $activeVisitorsQuery = VisitorSession::whereIn('client_id', $clientIds)
             ->where('is_online', true)
-            ->with(['visitor', 'client'])
-            ->latest('last_activity_at')
+            ->with(['visitor', 'chats' => function($q) {
+                $q->latest('last_message_at')->limit(1);
+            }]);
+
+        // Recent Chats Query
+        $recentChatsQuery = Chat::whereIn('client_id', $clientIds)
+            ->with(['visitor', 'visitorSession', 'client']);
+
+        // Apply Search
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $recentChatsQuery->whereHas('visitor', function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                  ->orWhere('email', 'like', "%{$search}%")
+                  ->orWhere('phone', 'like', "%{$search}%");
+            });
+            // Also filter active visitors if searching
+             $activeVisitorsQuery->whereHas('visitor', function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                  ->orWhere('email', 'like', "%{$search}%");
+            });
+        }
+
+        // Apply Client Filter
+        if ($request->filled('client_id')) {
+            $recentChatsQuery->where('client_id', $request->client_id);
+            $activeVisitorsQuery->where('client_id', $request->client_id);
+        }
+
+        // Apply Country Filter
+        if ($request->filled('country')) {
+            $country = $request->country;
+            $recentChatsQuery->whereHas('visitor', function ($q) use ($country) {
+                $q->where('country_code', $country);
+            });
+             $activeVisitorsQuery->whereHas('visitor', function ($q) use ($country) {
+                $q->where('country_code', $country);
+            });
+        }
+
+        $activeVisitors = $activeVisitorsQuery->latest('last_activity_at')->get();
+
+        $recentChats = $recentChatsQuery->latest('last_message_at')
+            ->limit(50)
             ->get();
 
-        $clients = $user->clients()->get();
+        // Filter Data with Counts
+        $clients = Client::whereIn('id', $clientIds)
+            ->withCount('chats')
+            ->get();
 
-        return view('dashboard.index', array_merge($data, [
-            'onlineVisitors' => $onlineVisitors,
+        $countries = Chat::whereIn('chats.client_id', $clientIds)
+            ->join('visitors', 'chats.visitor_id', '=', 'visitors.id')
+            ->whereNotNull('visitors.country_code')
+            ->select('visitors.country_code', 'visitors.country', DB::raw('count(chats.id) as total'))
+            ->groupBy('visitors.country_code', 'visitors.country')
+            ->orderByDesc('total')
+            ->get();
+
+        return view('dashboard.inbox', [
+            'chat' => null,
+            'messages' => collect(),
+            'participants' => collect(),
+            'files' => collect(),
+            'pageVisits' => collect(),
+            'hasMoreMessages' => false,
+            'activeVisitors' => $activeVisitors,
+            'recentChats' => $recentChats,
             'clients' => $clients,
-            'filters' => $request->only(['search', 'status', 'client_id']),
-            'currentChat' => null
-        ]));
+            'countries' => $countries,
+        ]);
     }
 
     public function monitoring()
@@ -169,30 +270,80 @@ class DashboardController extends Controller
         $clientIds = $user->clients()->pluck('clients.id');
 
         // Active visitors (all online sessions, with or without chats)
-        $activeVisitors = VisitorSession::whereIn('client_id', $clientIds)
+        $activeVisitorsQuery = VisitorSession::whereIn('client_id', $clientIds)
             ->where('is_online', true)
             ->with(['visitor', 'chats' => function($q) {
                 $q->latest('last_message_at')->limit(1);
-            }])
-            ->latest('last_activity_at')
+            }]);
+
+        // Recent Chats Query
+        $recentChatsQuery = Chat::whereIn('client_id', $clientIds)
+            ->with(['visitor', 'visitorSession', 'client']);
+
+        $request = request();
+
+        // Apply Search
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $recentChatsQuery->whereHas('visitor', function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                  ->orWhere('email', 'like', "%{$search}%")
+                  ->orWhere('phone', 'like', "%{$search}%");
+            });
+            // Also filter active visitors if searching
+             $activeVisitorsQuery->whereHas('visitor', function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                  ->orWhere('email', 'like', "%{$search}%");
+            });
+        }
+
+        // Apply Client Filter
+        if ($request->filled('client_id')) {
+            $recentChatsQuery->where('client_id', $request->client_id);
+            $activeVisitorsQuery->where('client_id', $request->client_id);
+        }
+
+        // Apply Country Filter
+        if ($request->filled('country')) {
+            $country = $request->country;
+            $recentChatsQuery->whereHas('visitor', function ($q) use ($country) {
+                $q->where('country_code', $country);
+            });
+             $activeVisitorsQuery->whereHas('visitor', function ($q) use ($country) {
+                $q->where('country_code', $country);
+            });
+        }
+
+        $activeVisitors = $activeVisitorsQuery->latest('last_activity_at')->get();
+
+        $recentChats = $recentChatsQuery->latest('last_message_at')
+            ->limit(50)
             ->get();
 
-        // Recent chats (last 50)
-        $recentChats = Chat::whereIn('client_id', $clientIds)
-            ->with(['visitor', 'visitorSession'])
-            ->latest('last_message_at')
-            ->limit(50)
+        // Filter Data with Counts
+        $clients = Client::whereIn('id', $clientIds)
+            ->withCount('chats')
+            ->get();
+
+        $countries = Chat::whereIn('chats.client_id', $clientIds)
+            ->join('visitors', 'chats.visitor_id', '=', 'visitors.id')
+            ->whereNotNull('visitors.country_code')
+            ->select('visitors.country_code', 'visitors.country', DB::raw('count(chats.id) as total'))
+            ->groupBy('visitors.country_code', 'visitors.country')
+            ->orderByDesc('total')
             ->get();
 
         return view('dashboard.inbox', [
             'chat' => $chat->load(['visitor', 'client', 'visitorSession']),
-            'messages' => $messages,
+            'messages' => $chat->messages()->with('sender')->orderBy('created_at', 'desc')->limit(50)->get()->reverse()->values(),
             'participants' => $participants,
             'files' => $files,
             'pageVisits' => $pageVisits,
             'hasMoreMessages' => $chat->messages()->count() > 50,
             'activeVisitors' => $activeVisitors,
             'recentChats' => $recentChats,
+            'clients' => $clients,
+            'countries' => $countries,
         ]);
     }
 
