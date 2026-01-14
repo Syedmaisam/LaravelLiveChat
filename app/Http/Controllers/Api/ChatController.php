@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Events\MessageSent;
 use App\Events\VisitorTyping;
+use App\Events\VisitorUpdated;
 use App\Http\Controllers\Controller;
 use App\Models\Chat;
 use App\Models\Client;
@@ -148,6 +149,9 @@ class ChatController extends Controller
             event(new MessageSent($message));
         }
 
+        // Broadcast visitor update for real-time dashboard updates
+        event(new VisitorUpdated($visitor, $chat));
+
         return response()->json([
             'chat_id' => $chat->id,
             'status' => $chat->status,
@@ -192,6 +196,9 @@ class ChatController extends Controller
         }
 
         event(new MessageSent($message));
+
+        // Broadcast visitor update for real-time dashboard updates
+        event(new VisitorUpdated($chat->visitor, $chat));
 
         // Notify agents
         $agentIds = [];

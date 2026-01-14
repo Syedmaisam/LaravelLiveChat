@@ -153,7 +153,7 @@
                     @endphp
                     @if($visitorChat)
                         {{-- Visitor has a chat - link to it --}}
-                        <a href="{{ route('inbox.chat', $visitorChat) }}" 
+                        <a href="{{ route('inbox.chat', $visitorChat) }}" id="chat-item-{{ $visitorChat->id }}"
                            class="block p-4 border-b border-[#222] hover:bg-[#1a1a1a] {{ $isCurrentChat ? 'bg-[#1a1a1a]' : '' }}">
                             <div class="flex items-start gap-3">
                                 <div class="w-10 h-10 bg-[#fe9e00]/20 rounded-full flex items-center justify-center shrink-0">
@@ -171,7 +171,7 @@
                         </a>
                     @else
                         {{-- Visitor online but no chat yet - clickable to initiate chat --}}
-                        <a href="{{ route('inbox.initiate', $session) }}" 
+                        <a href="{{ route('inbox.initiate', $session) }}" id="session-item-{{ $session->id }}"
                            class="block p-4 border-b border-[#222] hover:bg-[#1a1a1a]">
                             <div class="flex items-start gap-3">
                                 <div class="w-10 h-10 bg-[#fe9e00]/20 rounded-full flex items-center justify-center shrink-0">
@@ -198,7 +198,7 @@
             <!-- All Chats List -->
             <div id="list-all" class="flex-1 overflow-y-auto hidden">
                 @forelse($recentChats as $recentChat)
-                <a href="{{ route('inbox.chat', $recentChat) }}" 
+                <a href="{{ route('inbox.chat', $recentChat) }}" id="chat-item-{{ $recentChat->id }}"
                    class="block p-4 border-b border-[#222] hover:bg-[#1a1a1a] {{ isset($chat) && $recentChat->id === $chat->id ? 'bg-[#1a1a1a]' : '' }}">
                     <div class="flex items-start gap-3">
                         <div class="w-10 h-10 bg-[#fe9e00]/20 rounded-full flex items-center justify-center shrink-0">
@@ -368,7 +368,7 @@
                         </div>
                         <div>
                             <p class="text-xs text-gray-500">Name</p>
-                            <p class="text-sm">{{ $chat->visitor->name ?? 'Anonymous' }}</p>
+                            <p class="text-sm" id="visitor-name">{{ $chat->visitor->name ?? 'Anonymous' }}</p>
                         </div>
                     </div>
                     <div class="flex items-center gap-3">
@@ -379,7 +379,7 @@
                         </div>
                         <div>
                             <p class="text-xs text-gray-500">Email</p>
-                            <p class="text-sm">{{ $chat->visitor->email ?? 'Not provided' }}</p>
+                            <p class="text-sm" id="visitor-email">{{ $chat->visitor->email ?? 'Not provided' }}</p>
                         </div>
                     </div>
                     <div class="flex items-center gap-3">
@@ -390,7 +390,7 @@
                         </div>
                         <div>
                             <p class="text-xs text-gray-500">Phone</p>
-                            <p class="text-sm">{{ $chat->visitor->phone ?? 'Not provided' }}</p>
+                            <p class="text-sm" id="visitor-phone">{{ $chat->visitor->phone ?? 'Not provided' }}</p>
                         </div>
                     </div>
                 </div>
@@ -495,6 +495,88 @@
                      window.location.href = '{{ route("admin.visitors.index") }}?session=' + (data.session ? data.session.id : '');
                  };
              }
+
+             // Add to Active Visitors list (Status Item)
+             if (data.session && data.session.id) {
+                 const list = document.getElementById('list-active');
+                 const sessionId = data.session.id;
+                 const itemId = 'session-item-' + sessionId;
+                 
+                 // Remove "No active visitors" message if exists
+                 const emptyMsg = list.querySelector('.text-center');
+                 if (emptyMsg && emptyMsg.innerText.includes('No active visitors')) emptyMsg.remove();
+                 
+                 if (!document.getElementById(itemId)) {
+                     const div = document.createElement('div');
+                     div.innerHTML = `
+                        <a href="/dashboard/inbox/initiate/${sessionId}" id="${itemId}" class="block p-4 border-b border-[#222] hover:bg-[#1a1a1a] transition-colors duration-1000 ease-out bg-green-500/10">
+                            <div class="flex items-start gap-3">
+                                <div class="w-10 h-10 bg-[#fe9e00]/20 rounded-full flex items-center justify-center shrink-0">
+                                    <span class="text-[#fe9e00] font-semibold text-sm">${(data.visitor.name || 'A').substring(0,2).toUpperCase()}</span>
+                                </div>
+                                <div class="flex-1 min-w-0">
+                                    <div class="flex items-center justify-between">
+                                        <h4 class="font-medium truncate">${data.visitor.name || 'Anonymous'}</h4>
+                                        <span class="w-2 h-2 bg-green-500 rounded-full shrink-0"></span>
+                                    </div>
+                                    <p class="text-xs text-gray-500 truncate">${data.visitor.location.country || 'Unknown Location'}</p>
+                                    <p class="text-xs text-gray-400 truncate mt-1">Click to start chat</p>
+                                </div>
+                            </div>
+                        </a>
+                     `;
+                     const newItem = div.firstElementChild;
+                     list.insertBefore(newItem, list.firstChild);
+                     setTimeout(() => newItem.classList.remove('bg-green-500/10'), 2000);
+                 }
+             }
+        });
+
+        monitoringChannel.bind('visitor.updated', function(data) {
+             console.log('Visitor updated:', data);
+             if (data.chat && (data.chat.status === 'active' || data.chat.status === 'waiting')) {
+                 const list = document.getElementById('list-active');
+                 const chatUrl = '/dashboard/inbox/' + data.chat.id;
+                 const itemId = 'chat-item-' + data.chat.id;
+                 
+                 // Check if exists
+                 let existingItem = document.getElementById(itemId);
+                 
+                 if (!existingItem) {
+                     // Create new item
+                     const div = document.createElement('div');
+                     div.innerHTML = `
+                        <a href="${chatUrl}" id="${itemId}" class="block p-4 border-b border-[#222] hover:bg-[#1a1a1a] transition-colors duration-1000 ease-out bg-[#fe9e00]/20">
+                            <div class="flex items-start gap-3">
+                                <div class="w-10 h-10 bg-[#fe9e00]/20 rounded-full flex items-center justify-center shrink-0">
+                                    <span class="text-[#fe9e00] font-semibold text-sm">${(data.visitor.name || 'A').substring(0,2).toUpperCase()}</span>
+                                </div>
+                                <div class="flex-1 min-w-0">
+                                    <div class="flex items-center justify-between">
+                                        <h4 class="font-medium truncate">${data.visitor.name || 'Anonymous'}</h4>
+                                        <span class="w-2 h-2 bg-green-500 rounded-full shrink-0"></span>
+                                    </div>
+                                    <p class="text-xs text-gray-500 truncate">${data.chat.client_name || 'Client'}</p>
+                                    <p class="text-sm text-gray-400 truncate mt-1">Active now</p>
+                                </div>
+                            </div>
+                        </a>
+                     `;
+                     const newItem = div.firstElementChild;
+                     list.insertBefore(newItem, list.firstChild);
+                     
+                     // Remove highlight after 2s
+                     setTimeout(() => {
+                         newItem.classList.remove('bg-[#fe9e00]/20');
+                     }, 2000);
+                     
+                     playNotificationSound();
+                 } else {
+                    // Update existing item info
+                    const nameEl = existingItem.querySelector('h4');
+                    if (nameEl) nameEl.textContent = data.visitor.name || 'Anonymous';
+                 }
+             }
         });
 
         @if(isset($chat) && $chat)
@@ -515,6 +597,17 @@
                     markAsRead();
                 }
             }
+        });
+
+        chatChannel.bind('visitor.updated', function(data) {
+            console.log('Visitor info updated:', data);
+            const nameEl = document.getElementById('visitor-name');
+            const emailEl = document.getElementById('visitor-email');
+            const phoneEl = document.getElementById('visitor-phone');
+            
+            if (nameEl) nameEl.textContent = data.visitor.name || 'Anonymous';
+            if (emailEl) emailEl.textContent = data.visitor.email || 'Not provided';
+            if (phoneEl) phoneEl.textContent = data.visitor.phone || 'Not provided';
         });
 
         chatChannel.bind('messages.read', function(data) {
