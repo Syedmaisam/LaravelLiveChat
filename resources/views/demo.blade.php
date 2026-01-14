@@ -97,6 +97,7 @@
     </footer>
 
     <!-- Chat Widget -->
+    <!-- Widget -->
     @php
         $client = \App\Models\Client::where('is_active', true)->first();
         $widgetKey = $client?->widget_key ?? 'demo';
@@ -104,12 +105,14 @@
     <script>
         window.LIVE_CHAT_API_URL = '{{ url('/api') }}';
     </script>
-    <script src="{{ url('/widget.js') }}"></script>
+    <script src="{{ url('/widget.js') }}?v={{ time() }}"></script>
     <script>
-        // Initialize widget with the client's widget key
-        if (typeof LiveChatWidget !== 'undefined') {
-            LiveChatWidget.init('{{ $widgetKey }}');
-        }
+        // Initialize widget
+        window.addEventListener('load', function() {
+            if (typeof LiveChatWidget !== 'undefined') {
+                LiveChatWidget.init('{{ $widgetKey }}');
+            }
+        });
     </script>
 </body>
 </html>

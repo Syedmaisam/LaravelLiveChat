@@ -29,12 +29,40 @@
 
             @if(isset($client))
             <div>
-                <label class="block text-sm text-gray-400 mb-1">Widget Key</label>
-                <div class="flex items-center space-x-2">
-                    <code class="flex-1 bg-[#222] px-3 py-2 rounded text-sm text-[#fe9e00]">{{ $client->widget_key }}</code>
-                    <button type="button" onclick="navigator.clipboard.writeText('{{ $client->widget_key }}')" class="px-3 py-2 bg-[#222] hover:bg-[#333] rounded text-sm">Copy</button>
+                <label class="block text-sm text-gray-400 mb-1">Widget Installation Code</label>
+                <div class="bg-[#222] rounded p-3 relative group border border-[#333]">
+                    <pre class="text-xs text-gray-300 font-mono whitespace-pre-wrap break-all" id="widget-code">&lt;script&gt;
+  window.LIVE_CHAT_API_URL = '{{ url('/api') }}'; 
+&lt;/script&gt;
+&lt;script src="{{ url('/widget.js') }}"&gt;&lt;/script&gt;
+&lt;script&gt;
+  if(typeof LiveChatWidget !== 'undefined') {
+    LiveChatWidget.init('{{ $client->widget_key }}');
+  } else {
+    window.addEventListener('load', function() {
+       LiveChatWidget.init('{{ $client->widget_key }}');
+    });
+  }
+&lt;/script&gt;</pre>
+                    <button type="button" onclick="copyWidgetCode()" 
+                        class="absolute top-2 right-2 bg-[#333] hover:bg-[#444] text-gray-300 text-xs px-2 py-1 rounded transition-colors border border-[#444]">
+                        Copy Code
+                    </button>
+                    <!-- Confirmation Tooltip -->
+                    <span id="copy-feedback" class="absolute top-2 right-20 text-green-500 text-xs hidden transition-opacity">Copied!</span>
                 </div>
             </div>
+            
+            <script>
+            function copyWidgetCode() {
+                const code = document.getElementById('widget-code').innerText;
+                navigator.clipboard.writeText(code).then(() => {
+                   const feedback = document.getElementById('copy-feedback');
+                   feedback.classList.remove('hidden');
+                   setTimeout(() => feedback.classList.add('hidden'), 2000);
+                });
+            }
+            </script>
             @endif
 
             <div class="flex items-center">

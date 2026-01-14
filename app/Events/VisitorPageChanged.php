@@ -23,8 +23,8 @@ class VisitorPageChanged implements ShouldBroadcast
     public function broadcastOn(): array
     {
         return [
-            new PrivateChannel('visitor.' . $this->session->visitor_id),
-            new PrivateChannel('monitoring'),
+            new Channel('visitor.' . $this->session->visitor_id),
+            new Channel('monitoring'),
         ];
     }
 

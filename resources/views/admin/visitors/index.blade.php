@@ -344,6 +344,18 @@ function addVisitorToList(data) {
 
 // Real-time WebSocket Updates
 document.addEventListener('DOMContentLoaded', function() {
+    // Check URL query for session to open
+    const urlParams = new URLSearchParams(window.location.search);
+    const openSessionId = urlParams.get('session');
+    if (openSessionId) {
+        // Remove param from URL without reload
+        const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname + window.location.search.replace(/[\?&]session=[^&]+/, '').replace(/^&/, '?');
+        window.history.replaceState({path: newUrl}, '', newUrl);
+        
+        // Open panel
+        showVisitorDetail(openSessionId);
+    }
+
     // Wait for Reverb client to be ready
     setTimeout(function() {
         if (window.reverbClient) {
@@ -362,7 +374,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     new Notification('🔥 New Lead!', {
                         body: `${data.visitor.name || 'Anonymous'} is browsing ${data.visitor.current_page || 'your site'}`,
                         icon: '/favicon.ico',
-                        tag: 'new-visitor-' + data.session.id,
+                        tag: 'new-visitor-' + (data.session ? data.session.id : Date.now()),
                         requireInteraction: true
                     });
                 }
@@ -370,25 +382,38 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Show in-page alert banner
                 showLeadAlert(data);
                 
-                // Reload page to show new visitor
+                // Add to list or reload
                 if ('{{ $tab }}' === 'active') {
-                    setTimeout(() => location.reload(), 1000);
+                    // Try to add dynamically if function works, else reload
+                     setTimeout(() => location.reload(), 1000);
                 }
             });
             
-            // Visitor went offline - reload to update list
+            // Visitor status changed - reload to update list
             monitoringChannel.bind('status.changed', function(data) {
                 console.log('Visitor status changed:', data);
-                if (!data.is_online) {
-                    // Reload on both tabs so visitor moves from Active to History
-                    setTimeout(() => location.reload(), 1000);
+                const isOnline = data.is_online;
+                const sessionId = data.session_id;
+                
+                if (!isOnline && '{{ $tab }}' === 'active') {
+                     // Remove row immediately "on spot"
+                     const row = document.querySelector(`tr[data-session-id="${sessionId}"]`);
+                     if (row) {
+                         row.style.transition = 'all 0.5s';
+                         row.style.opacity = '0';
+                         row.style.transform = 'translateX(20px)';
+                         setTimeout(() => row.remove(), 500);
+                     }
+                } else {
+                     // If coming online (or history tab needing update), reload to get data
+                     setTimeout(() => location.reload(), 1000);
                 }
             });
             
             // Visitor changed page
             monitoringChannel.bind('visitor.page.changed', function(data) {
                 console.log('Page changed:', data);
-                const row = document.querySelector(`[data-session-id="${data.session_id}"]`);
+                const row = document.querySelector(`tr[data-session-id="${data.session_id}"]`);
                 if (row) {
                     const pageLink = row.querySelector('td:nth-child(4) a');
                     if (pageLink) {
@@ -396,6 +421,10 @@ document.addEventListener('DOMContentLoaded', function() {
                         pageLink.textContent = data.page_url.length > 40 
                             ? data.page_url.substring(0, 40) + '...' 
                             : data.page_url;
+                        
+                        // Highlight change
+                        pageLink.style.color = '#fff';
+                        setTimeout(() => pageLink.style.color = '', 500);
                     }
                 }
             });

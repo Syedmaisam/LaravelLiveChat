@@ -56,8 +56,15 @@
                 const monitoringChannel = window.reverbClient.subscribe('monitoring');
                 monitoringChannel.bind('visitor.status.changed', function(data) {
                     if (data.is_online) {
-                        showNotification('New Visitor', 'A new visitor is online', '/dashboard/monitoring');
+                        showNotification('Visitor Online', 'A visitor is now online', '{{ route("admin.visitors.index") }}');
                     }
+                });
+                monitoringChannel.bind('visitor.joined', function(data) {
+                    showNotification(
+                        'New Visitor 🔔', 
+                        `New visitor from ${data.visitor.location.country || 'Unknown'}`, 
+                        '{{ route("admin.visitors.index") }}?session=' + (data.session ? data.session.id : '')
+                    );
                 });
 
                 // Subscribe to agent private channel for notifications

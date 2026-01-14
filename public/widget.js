@@ -1604,6 +1604,36 @@
         
         channel.bind('proactive.message', function(data) {
             console.log('Received proactive message:', data);
+            
+            // Push to messages state so it's available when chat opens
+            const msgObj = {
+                id: 'proactive-' + Date.now(),
+                message: data.message,
+                sender_type: 'agent',
+                sender_name: data.agent_name,
+                created_at: data.timestamp || new Date().toISOString()
+            };
+            
+            state.messages.push(msgObj);
+            
+            // If chat is OPEN, update UI immediately
+            if (state.isOpen) {
+               // Hide details form and show messages so visitor sees the agent's message
+               // The form will reappear when they try to reply (handled in sendMessage)
+               const form = document.getElementById('live-chat-details-form');
+               const msgs = document.getElementById('live-chat-messages');
+               const footer = document.getElementById('live-chat-footer');
+               
+               if (form) form.style.display = 'none';
+               if (msgs) {
+                   msgs.style.display = 'block';
+                   renderMessages();
+                   const container = document.getElementById('messages-container');
+                   if (container) container.scrollTop = container.scrollHeight;
+               }
+               if (footer) footer.style.display = 'flex';
+            }
+
             showProactiveBubble(data.message, data.agent_name, data.agent_avatar);
             playNotificationSound();
         });
@@ -1643,6 +1673,18 @@
             state.isOpen = true;
             document.getElementById('live-chat-window').classList.add('open');
             hideUnreadBadge();
+            
+            // Show messages if any exist (proactive)
+            if (state.messages.length > 0) {
+                 document.getElementById('live-chat-details-form').style.display = 'none';
+                 document.getElementById('live-chat-messages').style.display = 'block';
+                 document.getElementById('live-chat-footer').style.display = 'flex';
+                 renderMessages();
+                 setTimeout(() => {
+                    const container = document.getElementById('messages-container');
+                    if (container) container.scrollTop = container.scrollHeight;
+                 }, 50);
+            }
         };
         
         // Auto-hide after 30 seconds
@@ -1673,12 +1715,16 @@
                 hideUnreadBadge(); // Clear unread indicator when opened
                 if (bubble) bubble.style.display = 'none'; // Hide proactive bubble when chat opens
                 
-                // If we have existing messages (agent-initiated chat), show them with footer
-                if (state.chatId && state.messages.length > 0) {
+                // If we have existing messages (agent-initiated chat or proactive), show them
+                if (state.messages.length > 0) {
                     document.getElementById('live-chat-details-form').style.display = 'none';
                     document.getElementById('live-chat-messages').style.display = 'block';
                     document.getElementById('live-chat-footer').style.display = 'flex';
                     renderMessages();
+                    setTimeout(() => {
+                        const container = document.getElementById('messages-container');
+                        if (container) container.scrollTop = container.scrollHeight;
+                    }, 50);
                 }
                 
                 markMessagesAsRead();

@@ -21,10 +21,59 @@
         <div class="text-sm text-gray-500 mt-1">Active Chats</div>
     </div>
     <div class="bg-[#111] border border-[#222] rounded-lg p-5">
-        <div class="text-2xl font-bold text-[#fe9e00]">{{ $stats['online'] ?? 0 }}</div>
+        <div class="text-2xl font-bold text-[#fe9e00]" id="online-visitors-count">{{ $stats['online'] ?? 0 }}</div>
         <div class="text-sm text-gray-500 mt-1">Online Visitors</div>
     </div>
 </div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Wait for Reverb/Pusher to initialize (handled in layout)
+        const checkReverb = setInterval(() => {
+            if (window.reverbClient) {
+                clearInterval(checkReverb);
+                subscribeToMonitoring();
+            }
+        }, 500);
+
+        function subscribeToMonitoring() {
+            console.log('Subscribing to monitoring channel for visitor stats...');
+            const channel = window.reverbClient.subscribe('monitoring');
+            
+            // New Visitor Joined
+            channel.bind('visitor.joined', function(data) {
+                console.log('Visitor joined:', data);
+                updateVisitorCount(1);
+            });
+            
+            // Visitor Status Changed (Online/Offline)
+            channel.bind('status.changed', function(data) {
+                console.log('Visitor status changed:', data);
+                // If coming online, +1. If going offline, -1.
+                // Note: accurate count relies on initial state being correct.
+                if (data.is_online) {
+                    updateVisitorCount(1);
+                } else {
+                    updateVisitorCount(-1);
+                }
+            });
+        }
+        
+        function updateVisitorCount(change) {
+            const el = document.getElementById('online-visitors-count');
+            if (el) {
+                let count = parseInt(el.textContent) || 0;
+                count += change;
+                if (count < 0) count = 0;
+                el.textContent = count;
+                
+                // Flash effect
+                el.style.color = '#fff';
+                setTimeout(() => el.style.color = '#fe9e00', 300);
+            }
+        }
+    });
+</script>
 
 </div>
 
