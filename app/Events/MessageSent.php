@@ -33,15 +33,19 @@ class MessageSent implements ShouldBroadcastNow
     public function broadcastWith(): array
     {
         $sender = $this->message->sender;
+        
+        // For agent messages, prefer stored sender_name (for dynamic pseudo name support)
+        // For visitors, use their name
+        $senderName = $this->message->sender_type === 'agent'
+            ? ($this->message->sender_name ?? ($sender ? ($sender->active_pseudo_name ?? $sender->name) : 'Agent'))
+            : ($sender->name ?? 'Visitor');
 
         return [
             'id' => $this->message->id,
             'chat_id' => $this->message->chat_id,
             'sender_type' => $this->message->sender_type,
             'sender_id' => $this->message->sender_id,
-            'sender_name' => $this->message->sender_type === 'agent'
-                ? ($sender->active_pseudo_name ?? $sender->name)
-                : ($sender->name ?? 'Visitor'),
+            'sender_name' => $senderName,
             'message_type' => $this->message->message_type,
             'message' => $this->message->message,
             'file_path' => $this->message->file_path,

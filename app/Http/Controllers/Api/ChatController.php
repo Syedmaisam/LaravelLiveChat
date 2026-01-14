@@ -58,8 +58,11 @@ class ChatController extends Controller
             ->get()
             ->map(function ($message) {
                 $data = $message->toArray();
-                if ($message->sender_type === 'agent' && $message->sender) {
-                    $data['sender_name'] = $message->sender->active_pseudo_name ?? $message->sender->name;
+                if ($message->sender_type === 'agent') {
+                    // Use stored sender_name if available (for dynamic pseudo name),
+                    // otherwise fallback to current name
+                    $data['sender_name'] = $message->sender_name 
+                        ?? ($message->sender ? ($message->sender->active_pseudo_name ?? $message->sender->name) : 'Agent');
                 }
                 return $data;
             });
@@ -255,8 +258,11 @@ class ChatController extends Controller
         // Format messages to include sender_name
         $formattedMessages = $messages->getCollection()->map(function ($message) {
             $data = $message->toArray();
-            if ($message->sender_type === 'agent' && $message->sender) {
-                $data['sender_name'] = $message->sender->active_pseudo_name ?? $message->sender->name;
+            if ($message->sender_type === 'agent') {
+                // Use stored sender_name if available (for dynamic pseudo name),
+                // otherwise fallback to current name
+                $data['sender_name'] = $message->sender_name 
+                    ?? ($message->sender ? ($message->sender->active_pseudo_name ?? $message->sender->name) : 'Agent');
             }
             return $data;
         });
@@ -359,10 +365,14 @@ class ChatController extends Controller
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
+        // Get the current pseudo name for this agent
+        $senderName = $user->active_pseudo_name ?? $user->name;
+        
         $message = Message::create([
             'chat_id' => $chat->id,
             'sender_type' => 'agent',
             'sender_id' => $user->id,
+            'sender_name' => $senderName, // Store name at send time for dynamic pseudo name support
             'message_type' => 'text',
             'message' => $request->message,
             'is_read' => false,

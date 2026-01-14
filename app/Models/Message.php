@@ -14,6 +14,7 @@ class Message extends Model
         'chat_id',
         'sender_type',
         'sender_id',
+        'sender_name',
         'message_type',
         'message',
         'file_path',

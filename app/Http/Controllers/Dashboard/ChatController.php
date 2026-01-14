@@ -44,10 +44,14 @@ class ChatController extends Controller
             event(new AgentJoinedChat($chat, $user));
         }
 
+        // Get the sender name at this moment
+        $senderName = $user->active_pseudo_name ?? $user->name;
+        
         $message = Message::create([
             'chat_id' => $chat->id,
             'sender_type' => 'agent',
             'sender_id' => $user->id,
+            'sender_name' => $senderName, // Store name at send time
             'message_type' => 'text',
             'message' => $request->message,
             'is_read' => false,
@@ -103,10 +107,14 @@ class ChatController extends Controller
         $path = $file->store("chat-files/{$chat->id}", 'local');
         $filename = time() . '_' . $file->getClientOriginalName();
 
+        // Get the sender name at this moment
+        $senderName = $user->active_pseudo_name ?? $user->name;
+        
         $message = Message::create([
             'chat_id' => $chat->id,
             'sender_type' => 'agent',
             'sender_id' => $user->id,
+            'sender_name' => $senderName, // Store name at send time
             'message_type' => 'file',
             'file_path' => $path,
             'file_name' => $file->getClientOriginalName(),
@@ -385,11 +393,15 @@ class ChatController extends Controller
             ['joined_at' => now()]
         );
 
+        // Get the sender name at this moment
+        $senderName = $user->active_pseudo_name ?? $user->name;
+        
         // Create the message
         $message = Message::create([
             'chat_id' => $chat->id,
             'sender_type' => 'agent',
             'sender_id' => $user->id,
+            'sender_name' => $senderName, // Store name at send time
             'message_type' => 'text',
             'message' => $request->message,
             'is_read' => false,

@@ -36,9 +36,19 @@
         channel: null,
         hasSubmittedDetails: false,
         visitorDetails: null,
+        unreadCount: 0,
+        originalTitle: document.title, // Store original title for tab badge
     };
-
-    // Load Pusher library dynamically
+    
+    // Get list of commonly used emojis
+    function getEmojiList() {
+        return [
+            '😊', '😂', '😍', '🥰', '😘', '🤗', '😎', '🤔',
+            '😅', '😉', '🙂', '😇', '👍', '👏', '🙏', '💪',
+            '❤️', '💯', '✨', '🎉', '👋', '🤝', '👀', '💡',
+            '✅', '❌', '⭐', '🔥', '💬', '📞', '📧', '🕐'
+        ];
+    }
     function loadPusherLibrary(callback) {
         if (window.Pusher) {
             callback();
@@ -178,6 +188,14 @@
                     </div>
                 </div>
                 <div class="live-chat-footer" id="live-chat-footer">
+                    <div class="emoji-picker-container" style="position: relative;">
+                        <button type="button" id="emoji-picker-btn" class="emoji-btn">😊</button>
+                        <div id="emoji-picker" class="emoji-picker" style="display: none;">
+                            <div class="emoji-grid">
+                                ${getEmojiList().map(e => `<span class="emoji-item" data-emoji="${e}">${e}</span>`).join('')}
+                            </div>
+                        </div>
+                    </div>
                     <input type="text" id="message-input" placeholder="Type a message...">
                     <button id="file-upload-btn">📎</button>
                     <button id="send-btn" onclick="window.LiveChatWidget.sendMessage()">Send</button>
@@ -348,34 +366,91 @@
                 width: 380px;
                 height: 600px;
                 background: white;
-                border-radius: 12px;
-                box-shadow: 0 8px 32px rgba(0,0,0,0.2);
-                display: none;
+                border-radius: 16px;
+                box-shadow: 0 12px 48px rgba(0,0,0,0.25), 0 4px 12px rgba(0,0,0,0.1);
+                display: flex;
                 flex-direction: column;
+                opacity: 0;
+                visibility: hidden;
+                transform: translateY(20px) scale(0.95);
+                transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+                overflow: hidden;
             }
             .live-chat-window.open {
-                display: flex;
+                opacity: 1;
+                visibility: visible;
+                transform: translateY(0) scale(1);
+            }
+            
+            /* Mobile responsive styles */
+            @media (max-width: 480px) {
+                #live-chat-widget {
+                    bottom: 10px !important;
+                    right: 10px !important;
+                }
+                #live-chat-widget.position-left {
+                    left: 10px !important;
+                }
+                .live-chat-button {
+                    width: 56px;
+                    height: 56px;
+                }
+                .live-chat-window {
+                    position: fixed !important;
+                    bottom: 0 !important;
+                    right: 0 !important;
+                    left: 0 !important;
+                    width: 100% !important;
+                    height: calc(100vh - 60px) !important;
+                    max-height: calc(100vh - 60px) !important;
+                    border-radius: 16px 16px 0 0 !important;
+                    transform: translateY(100%);
+                }
+                .live-chat-window.open {
+                    transform: translateY(0);
+                }
+                .proactive-bubble {
+                    width: calc(100vw - 80px) !important;
+                    max-width: 300px;
+                    right: 10px !important;
+                }
+                .live-chat-footer {
+                    padding: 10px 12px;
+                    padding-bottom: max(10px, env(safe-area-inset-bottom));
+                }
+                .live-chat-footer input {
+                    font-size: 16px; /* Prevent iOS zoom */
+                }
             }
             .live-chat-header {
-                background: #007bff;
+                background: linear-gradient(135deg, ${config.widgetColor} 0%, ${config.widgetColor}dd 100%);
                 color: white;
-                padding: 16px;
-                border-radius: 12px 12px 0 0;
+                padding: 18px 20px;
+                border-radius: 16px 16px 0 0;
                 display: flex;
                 justify-content: space-between;
                 align-items: center;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
             }
             .live-chat-header h3 {
                 margin: 0;
                 font-size: 18px;
+                font-weight: 600;
+                text-shadow: 0 1px 2px rgba(0,0,0,0.1);
             }
             .live-chat-actions button {
-                background: transparent;
+                background: rgba(255,255,255,0.15);
                 border: none;
                 color: white;
-                font-size: 20px;
+                font-size: 18px;
                 cursor: pointer;
-                padding: 0 8px;
+                padding: 6px 10px;
+                border-radius: 6px;
+                transition: background 0.2s ease;
+                margin-left: 6px;
+            }
+            .live-chat-actions button:hover {
+                background: rgba(255,255,255,0.25);
             }
             .live-chat-body {
                 flex: 1;
@@ -417,21 +492,26 @@
             }
             .live-chat-details-form input:focus {
                 outline: none;
-                border-color: #007bff;
+                border-color: ${config.widgetColor};
+                box-shadow: 0 0 0 3px ${config.widgetColor}20;
             }
             .live-chat-details-form button {
                 padding: 14px;
-                background: #007bff;
+                background: ${config.widgetColor};
                 color: white;
                 border: none;
                 border-radius: 8px;
                 cursor: pointer;
                 font-size: 16px;
-                font-weight: 500;
+                font-weight: 600;
                 margin-top: 8px;
+                transition: all 0.2s ease;
+                box-shadow: 0 2px 8px ${config.widgetColor}40;
             }
             .live-chat-details-form button:hover {
-                background: #0056b3;
+                transform: translateY(-1px);
+                box-shadow: 0 4px 12px ${config.widgetColor}50;
+                filter: brightness(1.05);
             }
             .welcome-message {
                 background: #f1f1f1;
@@ -472,8 +552,9 @@
                 word-wrap: break-word;
             }
             .message.visitor .message-bubble {
-                background: #007bff;
+                background: ${config.widgetColor};
                 color: white;
+                box-shadow: 0 1px 3px rgba(0,0,0,0.1);
             }
             .message.agent .message-bubble {
                 background: #f1f1f1;
@@ -497,28 +578,52 @@
                 stroke: white;
             }
             .live-chat-footer {
-                padding: 12px;
+                padding: 12px 16px;
                 border-top: 1px solid #eee;
                 display: flex;
                 gap: 8px;
                 align-items: center;
+                background: #fafafa;
             }
             .live-chat-footer input {
                 flex: 1;
-                padding: 10px;
-                border: 1px solid #ddd;
-                border-radius: 20px;
+                padding: 12px 16px;
+                border: 1px solid #e0e0e0;
+                border-radius: 24px;
                 font-size: 14px;
                 color: #333;
                 background: #fff;
+                transition: border-color 0.2s ease, box-shadow 0.2s ease;
+            }
+            .live-chat-footer input:focus {
+                outline: none;
+                border-color: ${config.widgetColor};
+                box-shadow: 0 0 0 3px ${config.widgetColor}15;
             }
             .live-chat-footer button {
-                padding: 10px 16px;
-                background: #007bff;
+                padding: 10px 18px;
+                background: ${config.widgetColor};
                 color: white;
                 border: none;
-                border-radius: 20px;
+                border-radius: 24px;
                 cursor: pointer;
+                font-weight: 500;
+                transition: all 0.2s ease;
+            }
+            .live-chat-footer button:hover {
+                transform: scale(1.05);
+                box-shadow: 0 2px 8px ${config.widgetColor}40;
+            }
+            .live-chat-footer #file-upload-btn {
+                padding: 8px 12px;
+                background: transparent;
+                color: #666;
+                font-size: 18px;
+            }
+            .live-chat-footer #file-upload-btn:hover {
+                color: ${config.widgetColor};
+                transform: scale(1.1);
+                box-shadow: none;
             }
             .typing-indicator {
                 display: flex;
@@ -541,6 +646,56 @@
             @keyframes typing {
                 0%, 60%, 100% { transform: translateY(0); }
                 30% { transform: translateY(-10px); }
+            }
+            
+            /* Emoji Picker Styles */
+            .emoji-btn {
+                background: transparent !important;
+                border: none;
+                font-size: 20px;
+                cursor: pointer;
+                padding: 6px 8px;
+                border-radius: 6px;
+                transition: all 0.2s ease;
+            }
+            .emoji-btn:hover {
+                background: rgba(0,0,0,0.05) !important;
+                transform: scale(1.1);
+                box-shadow: none !important;
+            }
+            .emoji-picker {
+                position: absolute;
+                bottom: 45px;
+                left: 0;
+                background: white;
+                border: 1px solid #e0e0e0;
+                border-radius: 12px;
+                box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+                padding: 10px;
+                z-index: 100;
+                animation: fadeInUp 0.2s ease;
+            }
+            @keyframes fadeInUp {
+                from { opacity: 0; transform: translateY(10px); }
+                to { opacity: 1; transform: translateY(0); }
+            }
+            .emoji-grid {
+                display: grid;
+                grid-template-columns: repeat(8, 1fr);
+                gap: 4px;
+                max-width: 280px;
+            }
+            .emoji-item {
+                padding: 6px;
+                font-size: 20px;
+                cursor: pointer;
+                border-radius: 6px;
+                text-align: center;
+                transition: all 0.15s ease;
+            }
+            .emoji-item:hover {
+                background: #f0f0f0;
+                transform: scale(1.2);
             }
         `;
         document.head.appendChild(style);
@@ -603,10 +758,18 @@
                     // Subscribe to chat channel for real-time updates
                     initChatWebSocket();
                     
-                    // Show unread badge if there are agent messages
-                    const agentMessages = state.messages.filter(m => m.sender_type === 'agent' && !m.is_read);
-                    if (agentMessages.length > 0) {
-                        showUnreadBadge(agentMessages.length);
+                    // Show unread badge and toast if there are unread agent messages
+                    const unreadAgentMessages = state.messages.filter(m => m.sender_type === 'agent' && !m.is_read);
+                    if (unreadAgentMessages.length > 0) {
+                        showUnreadBadge(unreadAgentMessages.length);
+                        
+                        // Show toast with the latest agent message
+                        const latestMessage = unreadAgentMessages[unreadAgentMessages.length - 1];
+                        showToastNotification(
+                            latestMessage.message || 'New message',
+                            latestMessage.sender_name || 'Support Agent',
+                            latestMessage.sender_avatar || null
+                        );
                     }
                 }
             })
@@ -707,6 +870,40 @@
             document.getElementById('file-input')?.click();
         });
         document.getElementById('file-input')?.addEventListener('change', handleFileUpload);
+        
+        // Emoji picker event listeners
+        const emojiPickerBtn = document.getElementById('emoji-picker-btn');
+        const emojiPicker = document.getElementById('emoji-picker');
+        
+        emojiPickerBtn?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const isVisible = emojiPicker.style.display !== 'none';
+            emojiPicker.style.display = isVisible ? 'none' : 'block';
+        });
+        
+        // Insert emoji on click
+        document.querySelectorAll('.emoji-item').forEach(item => {
+            item.addEventListener('click', () => {
+                const emoji = item.dataset.emoji;
+                const input = document.getElementById('message-input');
+                if (input) {
+                    const start = input.selectionStart;
+                    const end = input.selectionEnd;
+                    const text = input.value;
+                    input.value = text.substring(0, start) + emoji + text.substring(end);
+                    input.focus();
+                    input.selectionStart = input.selectionEnd = start + emoji.length;
+                }
+                emojiPicker.style.display = 'none';
+            });
+        });
+        
+        // Close picker when clicking outside
+        document.addEventListener('click', (e) => {
+            if (emojiPicker && !emojiPicker.contains(e.target) && e.target !== emojiPickerBtn) {
+                emojiPicker.style.display = 'none';
+            }
+        });
     }
 
     // Handle details form submission (shown on first message)
@@ -829,14 +1026,38 @@
                 </div>
             `;
         } else {
-            container.innerHTML = state.messages.map(msg => `
+            container.innerHTML = state.messages.map(msg => {
+                // Determine message state styles
+                const isSending = msg._sending;
+                const isFailed = msg._failed;
+                const bubbleStyle = isSending ? 'opacity: 0.7;' : (isFailed ? 'background: #ff4757 !important;' : '');
+                
+                // Determine status icon
+                let statusIcon = '';
+                if (msg.sender_type === 'visitor') {
+                    if (isSending) {
+                        // Clock icon for sending
+                        statusIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>';
+                    } else if (isFailed) {
+                        // Error icon for failed
+                        statusIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ff4757" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>';
+                    } else if (msg.is_read) {
+                        // Double check for read
+                        statusIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"></path><path d="M20 6L9 17l-5-5" style="transform: translate(5px, 0)"/></svg>';
+                    } else {
+                        // Single check for sent
+                        statusIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"></path></svg>';
+                    }
+                }
+                
+                return `
                 <div class="message ${msg.sender_type}">
                     ${msg.sender_type === 'agent' && msg.sender_name ? `
                         <div class="agent-name" style="font-size: 11px; color: #666; margin-bottom: 2px;">
                             ${escapeHtml(msg.sender_name)}
                         </div>
                     ` : ''}
-                    <div class="message-bubble">
+                    <div class="message-bubble" style="${bubbleStyle}">
                         ${msg.message_type === 'file' ? 
                             (msg.file_type && msg.file_type.startsWith('image/') ? 
                                 `<img src="${config.apiUrl}/chat/${state.chatId}/file/${msg.id}/download?visitor_key=${config.visitorKey}" 
@@ -857,14 +1078,11 @@
                     </div>
                     ${msg.sender_type === 'visitor' ? `
                         <div class="message-status ${msg.is_read ? 'read' : ''}" id="msg-status-${msg.id}">
-                            ${msg.is_read ? 
-                                '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"></path><path d="M20 6L9 17l-5-5" style="transform: translate(5px, 0)"/></svg>' : 
-                                '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"></path></svg>'
-                            }
+                            ${statusIcon}
                         </div>
                     ` : ''}
                 </div>
-            `).join('');
+            `}).join('');
         }
         container.scrollTop = container.scrollHeight;
     }
@@ -888,12 +1106,13 @@
             return;
         }
 
-        // Show message immediately (optimistic UI)
+        // Show message immediately (optimistic UI) with "sending" state
         const tempMessage = {
             id: 'temp-' + Date.now(),
             message: message,
             sender_type: 'visitor',
-            created_at: new Date().toISOString()
+            created_at: new Date().toISOString(),
+            _sending: true // Mark as sending for UI state
         };
         state.messages.push(tempMessage);
         renderMessages();
@@ -910,18 +1129,55 @@
         })
         .then(res => res.json())
         .then(data => {
-            // Update temp message with real ID
+            // Update temp message with real data and mark as sent
             const tempIndex = state.messages.findIndex(m => m.id === tempMessage.id);
             if (tempIndex !== -1 && data.message) {
                 state.messages[tempIndex] = data.message;
+                renderMessages(); // Re-render to update the status
             }
         })
         .catch(err => {
             console.error('Send message error:', err);
-            // Remove temp message on error
-            state.messages = state.messages.filter(m => m.id !== tempMessage.id);
-            renderMessages();
+            // Mark message as failed instead of removing
+            const tempIndex = state.messages.findIndex(m => m.id === tempMessage.id);
+            if (tempIndex !== -1) {
+                state.messages[tempIndex]._failed = true;
+                state.messages[tempIndex]._sending = false;
+                renderMessages();
+            }
+            // Show error notification
+            showSendErrorToast(message);
         });
+    }
+    
+    // Show send error toast with retry option
+    function showSendErrorToast(message) {
+        const toast = document.createElement('div');
+        toast.style.cssText = `
+            position: fixed;
+            bottom: 100px;
+            right: 20px;
+            background: #ff4757;
+            color: white;
+            padding: 12px 16px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(255, 71, 87, 0.3);
+            max-width: 280px;
+            z-index: 999999;
+            font-size: 14px;
+            cursor: pointer;
+        `;
+        toast.innerHTML = `
+            <div style="font-weight: 600; margin-bottom: 4px;">Message failed to send</div>
+            <div style="opacity: 0.9;">Tap to retry</div>
+        `;
+        toast.onclick = () => {
+            document.getElementById('message-input').value = message;
+            toast.remove();
+        };
+        document.body.appendChild(toast);
+        
+        setTimeout(() => toast.remove(), 5000);
     }
 
     // Handle file upload
@@ -945,11 +1201,25 @@
         .catch(err => console.error('File upload error:', err));
     }
 
-    // Initialize chat WebSocket
+    // Initialize chat WebSocket with reconnection logic
     function initChatWebSocket() {
+        // Track reconnection state
+        if (!state.wsReconnectAttempts) state.wsReconnectAttempts = 0;
+        const maxReconnectAttempts = 5;
+        const baseReconnectDelay = 1000; // 1 second
+        
         // Try to use Pusher if available
         if (window.Pusher && config.wsKey) {
             try {
+                // Cleanup existing connection if any
+                if (state.pusher) {
+                    try {
+                        state.pusher.disconnect();
+                    } catch (e) {
+                        console.log('Error disconnecting previous Pusher:', e);
+                    }
+                }
+                
                 const pusher = new Pusher(config.wsKey, {
                     wsHost: config.wsHost || window.location.hostname,
                     wsPort: config.wsPort || 8080,
@@ -958,6 +1228,50 @@
                     enabledTransports: ['ws', 'wss'],
                     disableStats: true,
                     cluster: 'mt1'
+                });
+                
+                // Handle connection state changes
+                pusher.connection.bind('connected', function() {
+                    console.log('WebSocket connected for chat', state.chatId);
+                    state.wsReconnectAttempts = 0; // Reset on success
+                    state.wsConnected = true;
+                    
+                    // Refresh messages on reconnect to catch any missed
+                    if (state.wasDisconnected) {
+                        loadMessages();
+                        state.wasDisconnected = false;
+                    }
+                });
+                
+                pusher.connection.bind('disconnected', function() {
+                    console.log('WebSocket disconnected, will attempt reconnect...');
+                    state.wsConnected = false;
+                    state.wasDisconnected = true;
+                });
+                
+                pusher.connection.bind('error', function(error) {
+                    console.log('WebSocket error:', error);
+                    state.wsConnected = false;
+                });
+                
+                pusher.connection.bind('unavailable', function() {
+                    console.log('WebSocket unavailable, scheduling reconnect...');
+                    state.wsReconnectAttempts++;
+                    
+                    if (state.wsReconnectAttempts < maxReconnectAttempts) {
+                        // Exponential backoff: 1s, 2s, 4s, 8s, 16s (max 30s)
+                        const delay = Math.min(baseReconnectDelay * Math.pow(2, state.wsReconnectAttempts - 1), 30000);
+                        console.log(`Reconnect attempt ${state.wsReconnectAttempts} in ${delay}ms`);
+                        
+                        setTimeout(() => {
+                            if (!state.wsConnected && state.chatId) {
+                                initChatWebSocket();
+                            }
+                        }, delay);
+                    } else {
+                        console.log('Max reconnect attempts reached, falling back to polling');
+                        pollForMessages();
+                    }
                 });
 
                 // Use public channel (no auth required)
@@ -973,7 +1287,12 @@
                         // Show visual indicator if chat window is closed
                         if (!state.isOpen) {
                             showUnreadBadge();
-                            showToastNotification(data.message || 'New message from agent');
+                            // Pass agent name and avatar to toast
+                            showToastNotification(
+                                data.message || 'New message',
+                                data.sender_name || 'Support Agent',
+                                data.sender_avatar || null
+                            );
                         }
                     }
                 });
@@ -996,7 +1315,6 @@
 
                 state.pusher = pusher;
                 state.channel = channel;
-                console.log('WebSocket connected for chat', state.chatId);
             } catch (e) {
                 console.error('WebSocket connection failed:', e);
                 // Fallback to polling
@@ -1039,54 +1357,105 @@
         }
     }
 
-    // Play notification sound using Web Audio API
+    // Play notification sound using Web Audio API - Pleasant chat notification tone
     function playNotificationSound() {
         try {
             const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-            const oscillator = audioContext.createOscillator();
-            const gainNode = audioContext.createGain();
             
-            oscillator.connect(gainNode);
-            gainNode.connect(audioContext.destination);
+            // Create a pleasant two-tone notification sound
+            const playTone = (freq, startTime, duration) => {
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+                
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+                
+                oscillator.frequency.value = freq;
+                oscillator.type = 'sine';
+                
+                // Envelope: quick attack, sustain, quick release
+                gainNode.gain.setValueAtTime(0, audioContext.currentTime + startTime);
+                gainNode.gain.linearRampToValueAtTime(0.15, audioContext.currentTime + startTime + 0.02);
+                gainNode.gain.setValueAtTime(0.15, audioContext.currentTime + startTime + duration - 0.02);
+                gainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime + startTime + duration);
+                
+                oscillator.start(audioContext.currentTime + startTime);
+                oscillator.stop(audioContext.currentTime + startTime + duration);
+            };
             
-            oscillator.frequency.value = 600;
-            oscillator.type = 'sine';
-            gainNode.gain.value = 0.1;
+            // Play a pleasant "ding-ding" sound (like iMessage)
+            playTone(880, 0, 0.12);      // A5
+            playTone(1318.5, 0.12, 0.15); // E6 (higher note)
             
-            oscillator.start();
-            setTimeout(() => oscillator.stop(), 200);
         } catch (e) {
-            console.log('Could not play notification sound');
+            console.log('Could not play notification sound:', e);
         }
     }
 
-    // Show unread badge on chat button
-    function showUnreadBadge() {
+    // Show unread badge on chat button and update tab title
+    function showUnreadBadge(count = 1) {
+        // Increment unread count
+        state.unreadCount += count;
+        
         const button = document.querySelector('.live-chat-button');
-        if (button && !button.querySelector('.unread-badge')) {
-            const badge = document.createElement('span');
-            badge.className = 'unread-badge';
-            badge.style.cssText = 'position:absolute;top:-4px;right:-4px;width:12px;height:12px;background:#fe9e00;border-radius:50%;border:2px solid #1a1a1a;';
-            button.style.position = 'relative';
-            button.appendChild(badge);
+        if (button) {
+            // Create or update badge
+            let badge = button.querySelector('.unread-badge');
+            if (!badge) {
+                badge = document.createElement('span');
+                badge.className = 'unread-badge';
+                button.style.position = 'relative';
+                button.appendChild(badge);
+            }
+            
+            // Style badge with count
+            if (state.unreadCount > 9) {
+                badge.textContent = '9+';
+                badge.style.cssText = 'position:absolute;top:-6px;right:-6px;min-width:20px;height:20px;background:#ff4757;border-radius:10px;border:2px solid #1a1a1a;font-size:10px;font-weight:bold;display:flex;align-items:center;justify-content:center;padding:0 4px;';
+            } else if (state.unreadCount > 1) {
+                badge.textContent = state.unreadCount;
+                badge.style.cssText = 'position:absolute;top:-6px;right:-6px;min-width:18px;height:18px;background:#ff4757;border-radius:9px;border:2px solid #1a1a1a;font-size:10px;font-weight:bold;display:flex;align-items:center;justify-content:center;';
+            } else {
+                badge.textContent = '';
+                badge.style.cssText = 'position:absolute;top:-4px;right:-4px;width:12px;height:12px;background:#ff4757;border-radius:50%;border:2px solid #1a1a1a;';
+            }
+        }
+        
+        // Update browser tab title
+        updateTabTitle();
+    }
+    
+    // Update browser tab title with unread count
+    function updateTabTitle() {
+        if (state.unreadCount > 0) {
+            document.title = `(${state.unreadCount}) ${state.originalTitle}`;
+        } else {
+            document.title = state.originalTitle;
         }
     }
 
     // Hide unread badge when chat opens
     function hideUnreadBadge() {
+        state.unreadCount = 0;
         const badge = document.querySelector('.live-chat-button .unread-badge');
         if (badge) badge.remove();
+        // Reset tab title
+        updateTabTitle();
     }
 
-    // Show toast notification for new messages
-    function showToastNotification(message) {
+    // Show toast notification for new messages (with agent details)
+    function showToastNotification(message, agentName = null, agentAvatar = null) {
         // Remove existing toast if any
         let toast = document.getElementById('live-chat-toast');
         if (toast) {
             toast.remove();
         }
-
-        // Create new toast
+        
+        // Get display name (use agent name or fallback)
+        const displayName = agentName || 'Support Agent';
+        const initial = displayName.charAt(0).toUpperCase();
+        
+        // Create new toast with agent info - bigger and more modern
         toast = document.createElement('div');
         toast.id = 'live-chat-toast';
         toast.style.cssText = `
@@ -1096,16 +1465,46 @@
             background: white;
             color: #333;
             padding: 16px 20px;
-            border-radius: 12px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            max-width: 300px;
+            border-radius: 16px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2), 0 4px 12px rgba(0,0,0,0.1);
+            max-width: 360px;
+            min-width: 280px;
             z-index: 999998;
             cursor: pointer;
-            animation: slideInUp 0.3s ease-out;
+            animation: slideInUp 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+            border-left: 4px solid ${config.widgetColor};
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
         `;
+        
+        // Add hover effect
+        toast.onmouseenter = () => {
+            toast.style.transform = 'translateY(-2px)';
+            toast.style.boxShadow = '0 14px 50px rgba(0,0,0,0.25), 0 6px 16px rgba(0,0,0,0.15)';
+        };
+        toast.onmouseleave = () => {
+            toast.style.transform = 'translateY(0)';
+            toast.style.boxShadow = '0 10px 40px rgba(0,0,0,0.2), 0 4px 12px rgba(0,0,0,0.1)';
+        };
+        
+        // Build avatar HTML - bigger avatar
+        let avatarHtml;
+        if (agentAvatar) {
+            avatarHtml = `<img src="${agentAvatar}" alt="${escapeHtml(displayName)}" style="width: 52px; height: 52px; border-radius: 50%; object-fit: cover; border: 2px solid ${config.widgetColor};">`;
+        } else {
+            avatarHtml = `<div style="width: 52px; height: 52px; border-radius: 50%; background: linear-gradient(135deg, ${config.widgetColor} 0%, ${config.widgetColor}cc 100%); color: white; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 20px; box-shadow: 0 2px 8px ${config.widgetColor}40;">${initial}</div>`;
+        }
+        
         toast.innerHTML = `
-            <div style="font-weight: 600; margin-bottom: 4px; font-size: 14px;">New message</div>
-            <div style="font-size: 13px; color: #666;">${escapeHtml(message)}</div>
+            <div style="display: flex; align-items: center; gap: 14px;">
+                <div style="flex-shrink: 0;">
+                    ${avatarHtml}
+                </div>
+                <div style="flex: 1; min-width: 0;">
+                    <div style="font-weight: 700; font-size: 15px; color: #1a1a1a; margin-bottom: 4px;">${escapeHtml(displayName)}</div>
+                    <div style="font-size: 14px; color: #555; line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">${escapeHtml(message)}</div>
+                </div>
+                <button onclick="event.stopPropagation(); this.closest('#live-chat-toast').remove();" style="flex-shrink: 0; background: #f5f5f5; border: none; color: #666; cursor: pointer; padding: 6px; font-size: 16px; line-height: 1; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; transition: all 0.15s ease;" onmouseenter="this.style.background='#eee';this.style.color='#333'" onmouseleave="this.style.background='#f5f5f5';this.style.color='#666'">&times;</button>
+            </div>
         `;
         
         // Click to open widget
@@ -1274,14 +1673,19 @@
                 hideUnreadBadge(); // Clear unread indicator when opened
                 if (bubble) bubble.style.display = 'none'; // Hide proactive bubble when chat opens
                 
-                // If we have existing messages (agent-initiated chat), show them directly
+                // If we have existing messages (agent-initiated chat), show them with footer
                 if (state.chatId && state.messages.length > 0) {
                     document.getElementById('live-chat-details-form').style.display = 'none';
                     document.getElementById('live-chat-messages').style.display = 'block';
+                    document.getElementById('live-chat-footer').style.display = 'flex';
                     renderMessages();
                 }
                 
                 markMessagesAsRead();
+                
+                // Remove toast if open
+                const toast = document.getElementById('live-chat-toast');
+                if (toast) toast.remove();
             } else {
                 window.classList.remove('open');
             }

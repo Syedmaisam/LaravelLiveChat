@@ -108,23 +108,36 @@
                 };
                 
                 window.playNotificationSound = function() {
-                    // Create a simple beep sound using Web Audio API
+                    // Create a pleasant two-tone notification sound
                     try {
                         const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                        const oscillator = audioContext.createOscillator();
-                        const gainNode = audioContext.createGain();
                         
-                        oscillator.connect(gainNode);
-                        gainNode.connect(audioContext.destination);
+                        const playTone = (freq, startTime, duration) => {
+                            const oscillator = audioContext.createOscillator();
+                            const gainNode = audioContext.createGain();
+                            
+                            oscillator.connect(gainNode);
+                            gainNode.connect(audioContext.destination);
+                            
+                            oscillator.frequency.value = freq;
+                            oscillator.type = 'sine';
+                            
+                            // Envelope: quick attack, sustain, quick release
+                            gainNode.gain.setValueAtTime(0, audioContext.currentTime + startTime);
+                            gainNode.gain.linearRampToValueAtTime(0.15, audioContext.currentTime + startTime + 0.02);
+                            gainNode.gain.setValueAtTime(0.15, audioContext.currentTime + startTime + duration - 0.02);
+                            gainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime + startTime + duration);
+                            
+                            oscillator.start(audioContext.currentTime + startTime);
+                            oscillator.stop(audioContext.currentTime + startTime + duration);
+                        };
                         
-                        oscillator.frequency.value = 800;
-                        oscillator.type = 'sine';
-                        gainNode.gain.value = 0.1;
+                        // Play a pleasant "ding-ding" sound
+                        playTone(880, 0, 0.12);      // A5
+                        playTone(1318.5, 0.12, 0.15); // E6 (higher note)
                         
-                        oscillator.start();
-                        setTimeout(() => oscillator.stop(), 150);
                     } catch (e) {
-                        console.log('Could not play notification sound');
+                        console.log('Could not play notification sound:', e);
                     }
                 };
                 
@@ -164,25 +177,51 @@
         [x-cloak] { display: none !important; }
     </style>
 </head>
-<body class="bg-black text-white min-h-screen">
+<body class="bg-black text-white min-h-screen" x-data="{ sidebarOpen: false }">
     <div class="flex min-h-screen">
+        <!-- Mobile Menu Button -->
+        <button @click="sidebarOpen = true" 
+                class="lg:hidden fixed top-3 left-3 z-50 p-2 rounded-lg bg-[#111] border border-[#222] text-white hover:bg-[#1a1a1a]">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+            </svg>
+        </button>
+        
+        <!-- Sidebar Overlay (Mobile) -->
+        <div x-show="sidebarOpen" 
+             @click="sidebarOpen = false"
+             x-transition:enter="transition-opacity ease-out duration-300"
+             x-transition:enter-start="opacity-0"
+             x-transition:enter-end="opacity-100"
+             x-transition:leave="transition-opacity ease-in duration-200"
+             x-transition:leave-start="opacity-100"
+             x-transition:leave-end="opacity-0"
+             class="fixed inset-0 bg-black/50 z-40 lg:hidden"
+             x-cloak></div>
+        
         <!-- Sidebar -->
-        <aside class="w-56 bg-[#111] border-r border-[#222] flex flex-col fixed h-full">
-            <!-- Logo -->
-            <div class="h-14 flex items-center px-4 border-b border-[#222]">
+        <aside :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'"
+               class="w-56 bg-[#111] border-r border-[#222] flex flex-col fixed h-full z-50 transition-transform duration-300 ease-in-out">
+            <!-- Logo with Close Button -->
+            <div class="h-14 flex items-center justify-between px-4 border-b border-[#222]">
                 <span class="text-[#fe9e00] font-bold text-lg">VisionTech</span>
+                <button @click="sidebarOpen = false" class="lg:hidden text-gray-400 hover:text-white">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
             </div>
 
             <!-- Menu -->
-            <nav class="flex-1 py-4 px-3 space-y-1">
+            <nav class="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
                 <div class="text-[10px] uppercase tracking-wider text-gray-500 px-3 mb-2">Main</div>
                 
-                <a href="{{ route('admin.dashboard') }}" class="flex items-center px-3 py-2 rounded text-sm {{ request()->routeIs('admin.dashboard') ? 'bg-[#fe9e00] text-black font-medium' : 'text-gray-400 hover:text-white hover:bg-[#1a1a1a]' }}">
+                <a href="{{ route('admin.dashboard') }}" @click="sidebarOpen = false" class="flex items-center px-3 py-2 rounded text-sm {{ request()->routeIs('admin.dashboard') ? 'bg-[#fe9e00] text-black font-medium' : 'text-gray-400 hover:text-white hover:bg-[#1a1a1a]' }}">
                     <svg class="w-4 h-4 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/></svg>
                     Dashboard
                 </a>
 
-                <a href="{{ route('dashboard') }}" class="flex items-center px-3 py-2 rounded text-sm text-gray-400 hover:text-white hover:bg-[#1a1a1a]">
+                <a href="{{ route('dashboard') }}" @click="sidebarOpen = false" class="flex items-center px-3 py-2 rounded text-sm text-gray-400 hover:text-white hover:bg-[#1a1a1a]">
                     <svg class="w-4 h-4 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
                     Live Chat
                 </a>
@@ -255,15 +294,15 @@
         </aside>
 
         <!-- Main -->
-        <main class="flex-1 ml-56">
+        <main class="flex-1 ml-0 lg:ml-56 min-h-screen">
             <!-- Header -->
-            <header class="h-14 bg-[#111] border-b border-[#222] flex items-center justify-between px-6 sticky top-0 z-10">
-                <h1 class="text-lg font-semibold">@yield('title')</h1>
+            <header class="h-14 bg-[#111] border-b border-[#222] flex items-center justify-between px-4 lg:px-6 sticky top-0 z-10">
+                <h1 class="text-lg font-semibold ml-10 lg:ml-0">@yield('title')</h1>
                 @yield('actions')
             </header>
 
             <!-- Content -->
-            <div class="p-6">
+            <div class="p-4 lg:p-6">
                 @if(session('success'))
                 <div class="bg-green-500/10 border border-green-500/30 text-green-400 px-4 py-3 rounded mb-6 text-sm">
                     {{ session('success') }}
