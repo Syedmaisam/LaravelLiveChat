@@ -380,6 +380,17 @@ class ChatController extends Controller
 
         event(new MessageSent($message));
 
+        // Proactive Event for Toast Notification (when chat closed)
+        if ($chat->visitor) {
+            \Illuminate\Support\Facades\Log::info("ProactiveMessage Debug: Broadcasting from API agentSendMessage. Visitor: {$chat->visitor->visitor_key}");
+            event(new \App\Events\ProactiveMessage(
+                $chat->visitor,
+                $request->message,
+                $senderName,
+                null
+            ));
+        }
+
         return response()->json([
             'message' => [
                 'id' => $message->id,
