@@ -99,6 +99,8 @@
                     console.log('Pusher library loaded');
                     // Now load saved visitor details (may call initChatWebSocket)
                     loadSavedVisitorDetails();
+                    // Check if agent initiated a chat before visitor filled form
+                    checkExistingChat();
                     // Also init WebSocket for general listening
                     initWebSocket();
                     // Subscribe to visitor channel for proactive messages
@@ -579,6 +581,36 @@
                 trackPage();
             }
         }, 1000);
+    }
+
+    // Check for existing chat (agent-initiated) and load messages
+    function checkExistingChat() {
+        if (!config.widgetKey || !config.visitorKey) return;
+        if (state.chatId) return; // Already have a chat
+        
+        fetch(`${config.apiUrl}/chat/check-existing?widget_key=${config.widgetKey}&visitor_key=${config.visitorKey}`)
+            .then(res => res.json())
+            .then(data => {
+                if (data.exists && data.chat_id) {
+                    console.log('Found existing agent-initiated chat:', data.chat_id);
+                    state.chatId = data.chat_id;
+                    state.messages = data.messages || [];
+                    
+                    // Save to localStorage
+                    localStorage.setItem('live_chat_chat_id', data.chat_id);
+                    localStorage.setItem('live_chat_session_timestamp', Date.now().toString());
+                    
+                    // Subscribe to chat channel for real-time updates
+                    initChatWebSocket();
+                    
+                    // Show unread badge if there are agent messages
+                    const agentMessages = state.messages.filter(m => m.sender_type === 'agent' && !m.is_read);
+                    if (agentMessages.length > 0) {
+                        showUnreadBadge(agentMessages.length);
+                    }
+                }
+            })
+            .catch(err => console.log('Check existing chat error:', err));
     }
 
     // Initialize WebSocket
@@ -1241,6 +1273,14 @@
                 window.classList.add('open');
                 hideUnreadBadge(); // Clear unread indicator when opened
                 if (bubble) bubble.style.display = 'none'; // Hide proactive bubble when chat opens
+                
+                // If we have existing messages (agent-initiated chat), show them directly
+                if (state.chatId && state.messages.length > 0) {
+                    document.getElementById('live-chat-details-form').style.display = 'none';
+                    document.getElementById('live-chat-messages').style.display = 'block';
+                    renderMessages();
+                }
+                
                 markMessagesAsRead();
             } else {
                 window.classList.remove('open');

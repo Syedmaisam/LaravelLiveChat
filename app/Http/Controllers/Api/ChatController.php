@@ -14,7 +14,66 @@ use Illuminate\Support\Facades\Storage;
 
 class ChatController extends Controller
 {
+    /**
+     * Check if visitor has an existing chat (e.g., agent-initiated)
+     * Returns chat info and messages if exists
+     */
+    public function checkExisting(Request $request)
+    {
+        $request->validate([
+            'widget_key' => 'required|string',
+            'visitor_key' => 'required|uuid',
+        ]);
+
+        $client = Client::where('widget_key', $request->widget_key)
+            ->where('is_active', true)
+            ->first();
+
+        if (!$client) {
+            return response()->json(['exists' => false]);
+        }
+
+        $visitor = Visitor::where('visitor_key', $request->visitor_key)
+            ->where('client_id', $client->id)
+            ->first();
+
+        if (!$visitor) {
+            return response()->json(['exists' => false]);
+        }
+
+        // Check for existing active/waiting chat
+        $chat = Chat::where('visitor_id', $visitor->id)
+            ->where('client_id', $client->id)
+            ->whereIn('status', ['waiting', 'active'])
+            ->first();
+
+        if (!$chat) {
+            return response()->json(['exists' => false]);
+        }
+
+        // Load messages with sender info
+        $messages = $chat->messages()
+            ->with('sender')
+            ->orderBy('created_at', 'asc')
+            ->get()
+            ->map(function ($message) {
+                $data = $message->toArray();
+                if ($message->sender_type === 'agent' && $message->sender) {
+                    $data['sender_name'] = $message->sender->active_pseudo_name ?? $message->sender->name;
+                }
+                return $data;
+            });
+
+        return response()->json([
+            'exists' => true,
+            'chat_id' => $chat->id,
+            'status' => $chat->status,
+            'messages' => $messages,
+        ]);
+    }
+
     public function create(Request $request)
+
     {
         $request->validate([
             'widget_key' => 'required|string',

@@ -20,6 +20,7 @@ Route::prefix('visitor')->group(function () {
 
 // Chat endpoints (public, authenticated by widget_key)
 Route::prefix('chat')->group(function () {
+    Route::get('/check-existing', [ChatController::class, 'checkExisting']);
     Route::post('/create', [ChatController::class, 'create']);
     Route::post('/{chat}/message', [ChatController::class, 'sendMessage']);
     Route::post('/{chat}/typing', [ChatController::class, 'typing']);

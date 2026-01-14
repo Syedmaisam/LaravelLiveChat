@@ -54,6 +54,17 @@ class ChatController extends Controller
         ]);
 
         event(new MessageSent($message));
+        
+        // Also send proactive message notification to widget (for toast above icon)
+        // This ensures visitor sees message even if they haven't opened chat yet
+        if ($chat->visitor) {
+            event(new \App\Events\ProactiveMessage(
+                $chat->visitor,
+                $request->message,
+                $user->active_pseudo_name ?? $user->name,
+                null
+            ));
+        }
 
         return response()->json([
             'message' => [
