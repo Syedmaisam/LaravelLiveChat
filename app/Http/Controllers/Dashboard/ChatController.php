@@ -62,7 +62,6 @@ class ChatController extends Controller
         // Also send proactive message notification to widget (for toast above icon)
         // This ensures visitor sees message even if they haven't opened chat yet
         if ($chat->visitor) {
-            \Illuminate\Support\Facades\Log::info("ProactiveMessage Debug: Sending via sendMessage. VisitorKey: {$chat->visitor->visitor_key}");
             event(new \App\Events\ProactiveMessage(
                 $chat->visitor,
                 $request->message,
@@ -360,13 +359,11 @@ class ChatController extends Controller
      */
     public function sendProactiveMessage(Request $request, \App\Models\Visitor $visitor)
     {
-        \Illuminate\Support\Facades\Log::info("ProactiveMessage Debug: ENTERING method. Visitor: {$visitor->id}, Key: {$visitor->visitor_key}, Client: {$visitor->client_id}");
 
         $user = Auth::user();
 
         // Verify agent has access to this visitor's client
         if (!$user->clients()->where('clients.id', $visitor->client_id)->exists()) {
-            \Illuminate\Support\Facades\Log::info("ProactiveMessage Debug: Unauthorized. User {$user->id} cannot access Client {$visitor->client_id}");
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
@@ -421,7 +418,6 @@ class ChatController extends Controller
         event(new MessageSent($message));
 
         // Also broadcast a proactive message notification to visitor's widget
-        \Illuminate\Support\Facades\Log::info("ProactiveMessage Debug: Broadcasting to visitor.{$visitor->visitor_key}. Message: {$request->message}");
         
         event(new \App\Events\ProactiveMessage(
             $visitor,

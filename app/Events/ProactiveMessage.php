@@ -19,7 +19,6 @@ class ProactiveMessage implements ShouldBroadcastNow
         public string $agentName,
         public ?string $agentAvatar = null
     ) {
-        \Illuminate\Support\Facades\Log::info("ProactiveMessage Debug: Event Constructed for Visitor Key: {$visitor->visitor_key}");
     }
 
     public function broadcastOn(): array
