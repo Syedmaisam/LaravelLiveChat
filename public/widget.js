@@ -185,6 +185,10 @@
                         <div class="typing-indicator" id="typing-indicator" style="display: none;">
                             <span></span><span></span><span></span>
                         </div>
+                        <div id="scroll-badge" class="scroll-badge" onclick="window.LiveChatWidget.scrollToBottom()">
+                            <span>New messages</span>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M7 13l5 5 5-5M7 6l5 5 5-5"/></svg>
+                        </div>
                     </div>
                 </div>
                 <div class="live-chat-footer" id="live-chat-footer">
@@ -585,8 +589,42 @@
                 align-items: center;
                 background: #fafafa;
             }
+            /* Scroll Badge */
+            .scroll-badge {
+                position: absolute;
+                bottom: 80px;
+                left: 50%;
+                transform: translateX(-50%) translateY(10px);
+                background: white;
+                color: ${config.widgetColor};
+                padding: 6px 14px;
+                border-radius: 20px;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                font-size: 13px;
+                font-weight: 600;
+                cursor: pointer;
+                z-index: 10;
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                opacity: 0;
+                visibility: hidden;
+                transition: all 0.3s ease;
+                border: 1px solid #eee;
+            }
+            .scroll-badge.visible {
+                opacity: 1;
+                visibility: visible;
+                transform: translateX(-50%) translateY(0);
+            }
+            .scroll-badge svg {
+                width: 16px;
+                height: 16px;
+                stroke-width: 2.5;
+            }
             .live-chat-footer input {
                 flex: 1;
+                min-width: 0; /* Fix flex overflow */
                 padding: 12px 16px;
                 border: 1px solid #e0e0e0;
                 border-radius: 24px;
@@ -904,6 +942,16 @@
                 emojiPicker.style.display = 'none';
             }
         });
+
+        // Hide Scroll Badge on Scroll to Bottom
+        const messagesContainer = document.getElementById('messages-container');
+        messagesContainer?.addEventListener('scroll', () => {
+            const isAtBottom = (messagesContainer.scrollHeight - messagesContainer.scrollTop - messagesContainer.clientHeight) < 50;
+            if (isAtBottom) {
+                const badge = document.getElementById('scroll-badge');
+                if (badge) badge.classList.remove('visible');
+            }
+        });
     }
 
     // Handle details form submission (shown on first message)
@@ -1113,9 +1161,38 @@
                     ` : ''}
                 </div>
             `}).join('');
+
         }
-        container.scrollTop = container.scrollHeight;
+        
+        // Smart Scroll Logic
+        const isAtBottom = (container.scrollHeight - container.scrollTop - container.clientHeight) < 100;
+        
+        // Force scroll if we are sending or if user was already at bottom
+        // (Loading messages initially also counts as at/near bottom usually)
+        if (state.forceScroll || isAtBottom) {
+             container.scrollTop = container.scrollHeight;
+             state.forceScroll = false;
+        } else {
+             // User is scrolled up and new content arrived -> Show badge
+             // But we need to distinguish "Initial Load" vs "New Message Update".
+             // We can check if messages length changed? 
+             // Simplest: The "Show Badge" logic is mostly relevant for Real-time events.
+             // We handle badge visibility in the Event Listener (websocket), but here we prevent auto-scroll.
+        }
     }
+    
+    // Explicit scroll helper
+    window.LiveChatWidget.scrollToBottom = function() {
+        const container = document.getElementById('messages-container');
+        if (container) {
+            container.scrollTop = container.scrollHeight;
+            state.forceScroll = true; // Ensure next render keeps it
+            
+            // Hide badge
+            const badge = document.getElementById('scroll-badge');
+            if (badge) badge.classList.remove('visible');
+        }
+    };
 
     // Send message
     function sendMessage() {
@@ -1145,6 +1222,8 @@
             _sending: true // Mark as sending for UI state
         };
         state.messages.push(tempMessage);
+        
+        state.forceScroll = true; // Force scroll for own messages
         renderMessages();
         input.value = '';
 
@@ -1312,7 +1391,22 @@
                     // Use loose equality for ID to handle string/int differences
                     if (data.sender_type === 'agent' && !state.messages.find(m => m.id == data.id)) {
                         state.messages.push(data);
-                        renderMessages();
+                        
+                        // Check scroll before render (approximate since we haven't rendered yet)
+                        const container = document.getElementById('messages-container');
+                        const wasScrolledUp = (container.scrollHeight - container.scrollTop - container.clientHeight) > 100;
+                        
+                        renderMessages(); // Will NOT scroll if wasScrolledUp (filtered in renderMessages)
+                        
+                        // If was scrolled up, show Badge
+                        if (wasScrolledUp && state.isOpen) {
+                             const badge = document.getElementById('scroll-badge');
+                             if (badge) {
+                                 badge.classList.add('visible');
+                                 // Update count text? "New messages" is generic enough.
+                             }
+                        }
+                        
                         // Play notification sound for agent messages
                         playNotificationSound();
                         // Show visual indicator if chat window is closed
