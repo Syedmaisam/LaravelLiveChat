@@ -77,7 +77,6 @@ class ChatController extends Controller
     }
 
     public function create(Request $request)
-
     {
         $request->validate([
             'widget_key' => 'required|string',
@@ -103,59 +102,67 @@ class ChatController extends Controller
             'phone' => $request->phone,
         ]);
 
-        $session = null;
-        if ($request->session_key) {
-            $session = $visitor->sessions()
-                ->where('session_key', $request->session_key)
-                ->first();
-        }
-
-        // Check if visitor already has an active/waiting chat (e.g., admin-initiated)
-        $existingChat = Chat::where('visitor_id', $visitor->id)
-            ->where('client_id', $client->id)
-            ->whereIn('status', ['waiting', 'active'])
-            ->first();
-
-        if ($existingChat) {
-            // Use existing chat (update visitor info and session if needed)
-            $chat = $existingChat;
-            if ($session && !$chat->visitor_session_id) {
-                $chat->update(['visitor_session_id' => $session->id]);
+        return \DB::transaction(function () use ($request, $client, $visitor) {
+            $session = null;
+            if ($request->session_key) {
+                $session = $visitor->sessions()
+                    ->where('session_key', $request->session_key)
+                    ->first();
             }
-            $chat->update(['lead_form_filled' => true]);
-        } else {
-            // Create new chat
-            $chat = Chat::create([
-                'client_id' => $client->id,
-                'visitor_id' => $visitor->id,
-                'visitor_session_id' => $session?->id,
-                'status' => 'waiting',
-                'lead_form_filled' => true,
-                'started_at' => now(),
-            ]);
-        }
 
-        // If a message was included, create the first message
-        if ($request->message) {
-            $message = Message::create([
+            // Check if visitor already has an active/waiting chat (e.g., admin-initiated)
+            // Use lockForUpdate to prevent race conditions (double submission)
+            $existingChat = Chat::where('visitor_id', $visitor->id)
+                ->where('client_id', $client->id)
+                ->whereIn('status', ['waiting', 'active'])
+                ->lockForUpdate()
+                ->first();
+
+            if ($existingChat) {
+                // Use existing chat (update visitor info and session if needed)
+                $chat = $existingChat;
+                if ($session && !$chat->visitor_session_id) {
+                    $chat->update(['visitor_session_id' => $session->id]);
+                }
+                $chat->update(['lead_form_filled' => true]);
+            } else {
+                // Create new chat
+                $chat = Chat::create([
+                    'client_id' => $client->id,
+                    'visitor_id' => $visitor->id,
+                    'visitor_session_id' => $session?->id,
+                    'status' => 'waiting',
+                    'lead_form_filled' => true,
+                    'started_at' => now(),
+                ]);
+            }
+
+            // If a message was included, create the first message
+            if ($request->message) {
+                // Check if message already exists (deduplication based on content/time approx if needed, 
+                // but usually transaction prevents the chat duplicate, so message duplicate is less likely if chat is same)
+                // However, if joining existing chat, we validly add the message.
+                
+                $message = Message::create([
+                    'chat_id' => $chat->id,
+                    'sender_type' => 'visitor',
+                    'sender_id' => $visitor->id,
+                    'message_type' => 'text',
+                    'message' => $request->message,
+                    'is_read' => false,
+                ]);
+                
+                event(new MessageSent($message));
+            }
+
+            // Broadcast visitor update for real-time dashboard updates
+            event(new VisitorUpdated($visitor, $chat));
+
+            return response()->json([
                 'chat_id' => $chat->id,
-                'sender_type' => 'visitor',
-                'sender_id' => $visitor->id,
-                'message_type' => 'text',
-                'message' => $request->message,
-                'is_read' => false,
+                'status' => $chat->status,
             ]);
-            
-            event(new MessageSent($message));
-        }
-
-        // Broadcast visitor update for real-time dashboard updates
-        event(new VisitorUpdated($visitor, $chat));
-
-        return response()->json([
-            'chat_id' => $chat->id,
-            'status' => $chat->status,
-        ]);
+        });
     }
 
     public function sendMessage(Request $request, Chat $chat)

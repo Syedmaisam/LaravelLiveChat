@@ -909,12 +909,20 @@
     // Handle details form submission (shown on first message)
     function handleDetailsFormSubmit(e) {
         e.preventDefault();
+        
+        if (state.isSubmitting) return;
+        state.isSubmitting = true;
+        
         const formData = new FormData(e.target);
         const pendingMessage = formData.get('pending_message');
         const name = formData.get('name');
         const email = formData.get('email');
         const phone = formData.get('phone');
         
+        // Disable button
+        const btn = e.target.querySelector('button[type="submit"]');
+        if (btn) btn.disabled = true;
+
         // Mark that user has submitted details and save to localStorage
         state.hasSubmittedDetails = true;
         state.visitorDetails = { name, email, phone };
@@ -947,7 +955,11 @@
             loadMessages();
             initChatWebSocket();
         })
-        .catch(err => console.error('Chat creation error:', err));
+        .catch(err => console.error('Chat creation error:', err))
+        .finally(() => {
+            state.isSubmitting = false;
+            if (btn) btn.disabled = false;
+        });
     }
 
     // Load saved visitor details from localStorage
@@ -1297,7 +1309,8 @@
 
                 channel.bind('message.sent', function(data) {
                     // Only add if not our own message (avoid duplicates)
-                    if (data.sender_type === 'agent' && !state.messages.find(m => m.id === data.id)) {
+                    // Use loose equality for ID to handle string/int differences
+                    if (data.sender_type === 'agent' && !state.messages.find(m => m.id == data.id)) {
                         state.messages.push(data);
                         renderMessages();
                         // Play notification sound for agent messages
@@ -1354,7 +1367,7 @@
                 .then(res => res.json())
                 .then(data => {
                     const newMessages = data.messages.filter(msg =>
-                        !state.messages.find(m => m.id === msg.id)
+                        !state.messages.find(m => m.id == msg.id)
                     );
                     if (newMessages.length > 0) {
                         state.messages.push(...newMessages);
@@ -1622,6 +1635,12 @@
         
         channel.bind('proactive.message', function(data) {
             console.log('Received proactive message:', data);
+            
+            // If we already have an active chat, ignore this event
+            // The main 'message.sent' event will handle the message and notifications
+            if (state.chatId) {
+                return;
+            }
             
             // Push to messages state so it's available when chat opens
             const msgObj = {

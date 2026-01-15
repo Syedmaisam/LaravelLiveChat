@@ -195,7 +195,7 @@ class ChatController extends Controller
             ->paginate($perPage);
 
         return response()->json([
-            'messages' => $messages->items(),
+            'messages' => collect($messages->items())->sortBy('id')->values()->all(),
             'pagination' => [
                 'current_page' => $messages->currentPage(),
                 'last_page' => $messages->lastPage(),

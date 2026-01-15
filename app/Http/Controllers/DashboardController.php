@@ -213,9 +213,12 @@ class DashboardController extends Controller
 
         // Load recent messages (last 50) - ordered oldest to newest
         $messages = $chat->messages()
-            ->orderBy('created_at', 'asc')
+            ->orderBy('created_at', 'desc')
+            ->orderBy('id', 'desc')
             ->limit(50)
-            ->get();
+            ->get()
+            ->sortBy('id')
+            ->values();
 
         // Load chat participants
         $participants = $chat->participants()->get();
@@ -335,7 +338,7 @@ class DashboardController extends Controller
 
         return view('dashboard.inbox', [
             'chat' => $chat->load(['visitor', 'client', 'visitorSession']),
-            'messages' => $chat->messages()->with('sender')->orderBy('created_at', 'desc')->limit(50)->get()->reverse()->values(),
+            'messages' => $chat->messages()->with('sender')->orderBy('created_at', 'desc')->orderBy('id', 'desc')->limit(50)->get()->sortBy('id')->values(),
             'participants' => $participants,
             'files' => $files,
             'pageVisits' => $pageVisits,
