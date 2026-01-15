@@ -1,59 +1,132 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# VisionTechChat
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+A powerful, real-time live chat support system built with Laravel, Reverb, and Vanilla JavaScript. Designed to help agents interact with website visitors seamlessly.
 
-## About Laravel
+## 🚀 Key Features
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+### For Agents (Dashboard)
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+-   **Real-time Inbox**: Receive messages instantly without refreshing.
+-   **Live Visitor Tracking**: See who is online, their location, country, and browsing history in real-time.
+-   **Proactive Messaging**: Send greetings to visitors ("Active Visitors" list) before they initiate a chat.
+-   **File Sharing**: Send and receive images and documents seamlessly.
+-   **Canned Responses**: Use quick shortcuts (e.g., `/hi`, `/pricing`) for common replies.
+-   **Typing Indicators**: See when visitors are typing a message.
+-   **Client Management**: Manage multiple websites/widgets from one dashboard.
+-   **Multi-Agent Support**: Assign agents to specific clients or departments.
+-   **Pseudo Names**: Agents can chat under different aliases (profiles) to protect privacy or represent different roles.
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+### For Visitors (Widget)
 
-## Learning Laravel
+-   **Embeddable Widget**: Lightweight, standalone Vanilla JS widget (No heavy framework dependencies).
+-   **Customizable Design**: Matches the client's branding (Colors, Logo, Position).
+-   **Offline Forms**: Lead capture form when no agents are online.
+-   **Sound & Toast Notifications**: Alerts visitors of new messages even when the chat bubble is closed.
+-   **File Attachments**: Visitors can share screenshots or documents.
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework. You can also check out [Laravel Learn](https://laravel.com/learn), where you will be guided through building a modern Laravel application.
+## 🛠️ Technology Stack
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+-   **Backend**: Laravel Framework (PHP 8.2+)
+-   **Real-time**: Laravel Reverb (WebSockets, Pusher Protocol Compatible)
+-   **Frontend (Dashboard)**: Blade Templates, TailwindCSS, Alpine.js
+-   **Frontend (Widget)**: Vanilla JavaScript
+-   **Database**: MySQL
+-   **Storage**: Local / S3 (Configurable)
 
-## Laravel Sponsors
+## ⚙️ Installation & Setup
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+### Prerequisites
 
-### Premium Partners
+-   PHP 8.2 or higher
+-   Composer
+-   Node.js & NPM
+-   MySQL Database
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+### Steps
 
-## Contributing
+1.  **Clone the repository**
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+    ```bash
+    git clone https://github.com/yourusername/vision-tech-chat.git
+    cd vision-tech-chat
+    ```
 
-## Code of Conduct
+2.  **Install PHP Dependencies**
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+    ```bash
+    composer install
+    ```
 
-## Security Vulnerabilities
+3.  **Install Node Dependencies**
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+    ```bash
+    npm install
+    ```
 
-## License
+4.  **Environment Setup**
+
+    ```bash
+    cp .env.example .env
+    php artisan key:generate
+    ```
+
+    -   Configure your database credentials in `.env` (`DB_DATABASE`, `DB_USERNAME`, etc.).
+    -   Ensure `BROADCAST_CONNECTION=reverb` is set.
+    -   Set `FILESYSTEM_DISK=public` (or your preferred driver).
+
+5.  **Database Migration**
+
+    ```bash
+    php artisan migrate
+    ```
+
+6.  **Build Assets**
+
+    ```bash
+    npm run build
+    ```
+
+7.  **Start WebSocket Server (Reverb)**
+
+    ```bash
+    php artisan reverb:start
+    ```
+
+    _(Keep this running in a separate terminal or service)_
+
+8.  **Run Application**
+    ```bash
+    php artisan serve
+    ```
+
+## 📦 Widget Installation
+
+To add the chat widget to an external website, include the following script in the `<body>` tag.
+
+```html
+<!-- VisionTechChat Widget -->
+<script>
+    (function (w, d, s, u) {
+        w.VisionTechChat = {
+            key: "YOUR_WIDGET_KEY",
+            api_url: "http://localhost:8000", // Replace with your app URL
+        };
+        var h = d.getElementsByTagName(s)[0],
+            j = d.createElement(s);
+        j.async = true;
+        j.src = u + "/widget.js";
+        h.parentNode.insertBefore(j, h);
+    })(window, document, "script", "http://localhost:8000");
+</script>
+```
+
+-   **YOUR_WIDGET_KEY**: Found in **Admin Dashboard > Clients > Edit > Widget Code**.
+-   **api_url**: The base URL where VisionTechChat is hosted.
+
+## 🤝 Contributing
+
+Contributions are welcome! Please submit a Pull Request or open an Issue.
+
+## 📄 License
 
 The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
