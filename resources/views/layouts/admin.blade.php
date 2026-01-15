@@ -212,7 +212,7 @@
             <!-- Logo with Close Button -->
             <div class="h-14 flex items-center justify-between px-4 border-b border-[#222]">
                 <a href="{{ route('admin.dashboard') }}" class="block transition-opacity hover:opacity-80">
-                    <img src="{{ asset('logo.svg') }}" alt="{{ config('app.name') }}" class="h-8">
+                    <img src="{{ asset('visiontechlogow.webp') }}" style=" height: 50px; " alt="{{ config('app.name') }}" class="h-8">
                 </a>
                 <button @click="sidebarOpen = false" class="lg:hidden text-gray-400 hover:text-white">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

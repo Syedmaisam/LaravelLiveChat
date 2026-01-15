@@ -26,7 +26,7 @@
                 <svg class="w-6 h-6 group-hover:-translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
                 </svg>
-                <img src="{{ asset('logo.svg') }}" alt="{{ config('app.name') }}" class="h-8 hidden md:block">
+                <img src="{{ asset('visiontechlogow.webp') }}" style="height: 50px;" alt="{{ config('app.name') }}" class="h-8 hidden md:block">
             </a>
             @if(isset($chat) && $chat)
             <div class="flex items-center gap-3">

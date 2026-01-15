@@ -12,10 +12,7 @@
     <div class="w-full max-w-sm p-6">
         <!-- Logo -->
         <div class="text-center mb-8">
-            <div class="inline-flex items-center justify-center w-12 h-12 bg-[#fe9e00] rounded-lg mb-4">
-                <span class="text-black font-bold text-xl">VT</span>
-            </div>
-            <h1 class="text-white text-xl font-bold">VisionTech</h1>
+            <img src="{{ asset('visiontechlogow.webp') }}" style="height: 50px;" alt="VisionTech" class="mx-auto mb-4">
             <p class="text-gray-500 text-sm mt-1">Live Chat Admin</p>
         </div>
 

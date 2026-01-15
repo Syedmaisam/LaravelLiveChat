@@ -13,7 +13,7 @@
     <header class="bg-[#111] border-b border-[#222]">
         <div class="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
             <div class="flex items-center">
-                <span class="text-[#fe9e00] font-bold text-xl">VisionTech</span>
+                <img src="{{ asset('visiontechlogow.webp') }}" style="height: 50px;" alt="VisionTech">
                 <span class="ml-2 text-gray-500 text-sm">Demo Site</span>
             </div>
             <nav class="space-x-6 text-sm">

@@ -99,6 +99,21 @@ A powerful, real-time live chat support system built with Laravel, Reverb, and V
     php artisan serve
     ```
 
+## ⏰ Scheduler (Periodic Tasks)
+
+This application uses Laravel's scheduler to perform maintenance tasks, such as marking inactive visitors as offline.
+
+Add the following Cron entry to your server:
+
+```bash
+* * * * * cd /path/to/vision-tech-chat && php artisan schedule:run >> /dev/null 2>&1
+```
+
+**Scheduled Tasks:**
+
+-   `visitors:cleanup-stale`: Runs every minute to update visitor online status.
+-   `chat:cleanup-files`: Runs daily to remove temporary files.
+
 ## 📦 Widget Installation
 
 To add the chat widget to an external website, include the following script in the `<body>` tag.
