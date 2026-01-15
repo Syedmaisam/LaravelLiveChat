@@ -38,7 +38,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/dashboard/monitoring', [DashboardController::class, 'monitoring'])->name('dashboard.monitoring');
     Route::get('/dashboard/chat/{chat}', [DashboardController::class, 'chat'])->name('dashboard.chat');
     Route::get('/inbox/{chat}', [DashboardController::class, 'inbox'])->name('inbox.chat');
-    Route::get('/inbox/session/{session}', [DashboardController::class, 'initiateFromSession'])->name('inbox.initiate');
+    Route::post('/inbox/session/{session}', [DashboardController::class, 'initiateFromSession'])->name('inbox.initiate');
     Route::post('/dashboard/chat/initiate', [DashboardController::class, 'initiateChat'])->name('dashboard.chat.initiate');
 
     // Chat actions

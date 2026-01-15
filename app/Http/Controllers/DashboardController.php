@@ -275,7 +275,9 @@ class DashboardController extends Controller
         // Active visitors (all online sessions, with or without chats)
         $activeVisitorsQuery = VisitorSession::whereIn('client_id', $clientIds)
             ->where('is_online', true)
-            ->with(['visitor', 'chats' => function($q) {
+            ->with(['visitor.chats' => function($q) {
+                $q->whereIn('status', ['active', 'waiting'])->latest('last_message_at');
+            }, 'chats' => function($q) {
                 $q->latest('last_message_at')->limit(1);
             }]);
 
@@ -317,7 +319,7 @@ class DashboardController extends Controller
             });
         }
 
-        $activeVisitors = $activeVisitorsQuery->latest('last_activity_at')->get();
+        $activeVisitors = $activeVisitorsQuery->latest('last_activity_at')->get()->unique('visitor_id');
 
         $recentChats = $recentChatsQuery->latest('last_message_at')
             ->limit(50)
@@ -361,6 +363,8 @@ class DashboardController extends Controller
 
         // Check if chat already exists for this session
         $chat = Chat::where('visitor_session_id', $session->id)->first();
+
+        \Log::info("initiateFromSession called", ['method' => request()->method(), 'session_id' => $session->id]);
 
         if (!$chat) {
             // Create new chat
