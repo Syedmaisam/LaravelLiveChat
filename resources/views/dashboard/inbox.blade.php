@@ -604,6 +604,21 @@
              }
         });
 
+        monitoringChannel.bind('status.changed', function(data) {
+             console.log('Status changed:', data);
+             if (!data.is_online) {
+                 // Remove from list if offline
+                 // Use data-visitor-id to find the element (works for both session items and chat items)
+                 const items = document.querySelectorAll(`[data-visitor-id="${data.visitor_id}"]`);
+                 items.forEach(item => {
+                     // Add fade out effect
+                     item.style.transition = 'opacity 0.5s, height 0.5s';
+                     item.style.opacity = '0';
+                     setTimeout(() => item.remove(), 500);
+                 });
+             }
+         });
+
         @if(isset($chat) && $chat)
         const chatId = {{ $chat->id }}; // Must use numeric ID to match broadcast channel
         const sessionId = {{ $chat->visitorSession?->id ?? 'null' }};
