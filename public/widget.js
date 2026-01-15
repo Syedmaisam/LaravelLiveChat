@@ -1030,14 +1030,7 @@
         const distFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
         const isAtBottom = distFromBottom <= threshold;
         
-        console.log('Scroll Debug:', {
-            scrollHeight: container.scrollHeight,
-            scrollTop: container.scrollTop,
-            clientHeight: container.clientHeight,
-            distFromBottom: distFromBottom,
-            isAtBottom: isAtBottom,
-            forceScroll: state.forceScroll
-        });
+
         
         // Safe State Isolation: Merge proactive message if exists
         let messagesToRender = [...state.messages];
