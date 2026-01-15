@@ -1079,12 +1079,15 @@
     function renderMessages() {
         const container = document.getElementById('messages-container');
         
+        // 1. Capture Scroll State BEFORE update
+        // Use a small threshold (e.g., 50px) to consider "at bottom"
+        // If container is empty (scrollHeight == clientHeight), isAtBottom is true
+        const threshold = 50;
+        const isAtBottom = (container.scrollHeight - container.scrollTop - container.clientHeight) <= threshold;
+        
         // Safe State Isolation: Merge proactive message if exists
-        // This ensures the proactive message is always shown, even if checkExistingChat 
-        // overwrites state.messages with empty server history
         let messagesToRender = [...state.messages];
         if (state.proactiveMessage) {
-            // Deduplicate: Don't add if already in messages
             const exists = messagesToRender.some(m => 
                 m.id === state.proactiveMessage.id || 
                 (m.message === state.proactiveMessage.message && m.sender_type === 'agent')
@@ -1114,16 +1117,12 @@
                 let statusIcon = '';
                 if (msg.sender_type === 'visitor') {
                     if (isSending) {
-                        // Clock icon for sending
                         statusIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>';
                     } else if (isFailed) {
-                        // Error icon for failed
                         statusIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ff4757" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>';
                     } else if (msg.is_read) {
-                        // Double check for read
                         statusIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"></path><path d="M20 6L9 17l-5-5" style="transform: translate(5px, 0)"/></svg>';
                     } else {
-                        // Single check for sent
                         statusIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"></path></svg>';
                     }
                 }
@@ -1161,23 +1160,27 @@
                     ` : ''}
                 </div>
             `}).join('');
-
         }
         
-        // Smart Scroll Logic
-        const isAtBottom = (container.scrollHeight - container.scrollTop - container.clientHeight) < 100;
-        
-        // Force scroll if we are sending or if user was already at bottom
-        // (Loading messages initially also counts as at/near bottom usually)
+        // 2. Decide Scroll Logic AFTER update (but based on state BEFORE update)
         if (state.forceScroll || isAtBottom) {
              container.scrollTop = container.scrollHeight;
              state.forceScroll = false;
+             
+             // Hide badge if we scrolled to bottom
+             const badge = document.getElementById('scroll-badge');
+             if (badge) badge.classList.remove('visible');
         } else {
-             // User is scrolled up and new content arrived -> Show badge
-             // But we need to distinguish "Initial Load" vs "New Message Update".
-             // We can check if messages length changed? 
-             // Simplest: The "Show Badge" logic is mostly relevant for Real-time events.
-             // We handle badge visibility in the Event Listener (websocket), but here we prevent auto-scroll.
+             // We are NOT scrolling to bottom automaticallly
+             // This means user was scrolled up AND no force scroll request.
+             // If this render was triggered by a new INCOMING message, we should show Badge.
+             // (If it was a re-render for Status Update, we probably don't need badge, but harmless).
+             
+             // Show badge only if we have messages
+             if (messagesToRender.length > 0) {
+                 const badge = document.getElementById('scroll-badge');
+                 if (badge) badge.classList.add('visible');
+             }
         }
     }
     
@@ -1380,21 +1383,7 @@
                     // Use loose equality for ID to handle string/int differences
                     if (data.sender_type === 'agent' && !state.messages.find(m => m.id == data.id)) {
                         state.messages.push(data);
-                        
-                        // Check scroll before render (approximate since we haven't rendered yet)
-                        const container = document.getElementById('messages-container');
-                        const wasScrolledUp = (container.scrollHeight - container.scrollTop - container.clientHeight) > 100;
-                        
-                        renderMessages(); // Will NOT scroll if wasScrolledUp (filtered in renderMessages)
-                        
-                        // If was scrolled up, show Badge
-                        if (wasScrolledUp && state.isOpen) {
-                             const badge = document.getElementById('scroll-badge');
-                             if (badge) {
-                                 badge.classList.add('visible');
-                                 // Update count text? "New messages" is generic enough.
-                             }
-                        }
+                        renderMessages();
                         
                         // Play notification sound for agent messages
                         playNotificationSound();
