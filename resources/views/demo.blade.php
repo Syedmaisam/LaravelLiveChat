@@ -14,7 +14,7 @@
         <div class="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
             <div class="flex items-center">
                 <img src="{{ asset('visiontechlogow.webp') }}" style="height: 50px;" alt="VisionTech">
-                <span class="ml-2 text-gray-500 text-sm">Demo Site</span>
+                <!-- <span class="ml-2 text-gray-500 text-sm">Demo Site</span> -->
             </div>
             <nav class="space-x-6 text-sm">
                 <a href="#" class="text-gray-400 hover:text-white">Home</a>
@@ -93,7 +93,7 @@
 
     <!-- Footer -->
     <footer class="py-6 px-4 border-t border-[#222] text-center text-gray-500 text-sm">
-        &copy; 2024 VisionTech. This is a demo page to test the chat widget.
+        &copy; {{ date('Y') }} VisionTech. This is a demo page to test the chat widget.
     </footer>
 
     <!-- Chat Widget -->

@@ -234,6 +234,9 @@
                 @foreach($messages as $message)
                 <div class="mb-4 flex {{ $message->sender_type === 'visitor' ? 'justify-start' : 'justify-end' }}">
                     <div class="max-w-[70%]">
+                        @if($message->sender_type === 'agent')
+                            <div class="text-xs text-gray-500 mb-1 text-right mr-2">{{ $message->sender_name ?? 'Agent' }}</div>
+                        @endif
                         <div class="message-bubble px-4 py-2 rounded-2xl {{ $message->sender_type === 'visitor' ? 'bg-[#222] text-white' : 'bg-[#fe9e00] text-black' }}">
                             @if($message->message_type === 'file')
                                 @if($message->file_type && str_starts_with($message->file_type, 'image/'))
@@ -588,10 +591,12 @@
         
         chatChannel.bind('message.sent', function(data) {
             console.log('Received message event:', data);
-            // Only show visitor messages (agent messages added optimistically)
-            if (data.sender_type === 'visitor') {
+            // Show visitor messages AND other agents' messages (avoid echo for self)
+            const isMe = data.sender_type === 'agent' && data.sender_id == userId;
+            
+            if (!isMe) {
                 addMessage(data);
-                // Play notification sound for visitor messages
+                // Play notification sound
                 playNotificationSound();
                 if (document.visibilityState === 'visible') {
                     markAsRead();
@@ -695,6 +700,7 @@
             
             div.innerHTML = `
                 <div class="max-w-[70%]">
+                    ${!isVisitor ? `<div class="text-xs text-gray-500 mb-1 text-right mr-2">${msg.sender_name || 'Agent'}</div>` : ''}
                     <div class="message-bubble px-4 py-2 rounded-2xl ${isVisitor ? 'bg-[#222] text-white' : 'bg-[#fe9e00] text-black'}">
                         ${messageContent}
                     </div>

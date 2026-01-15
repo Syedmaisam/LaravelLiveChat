@@ -2,7 +2,7 @@
 
 A powerful, real-time live chat support system built with Laravel, Reverb, and Vanilla JavaScript. Designed to help agents interact with website visitors seamlessly.
 
-## 🚀 Key Features
+## Key Features
 
 ### For Agents (Dashboard)
 
