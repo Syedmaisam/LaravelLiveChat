@@ -1181,18 +1181,7 @@
         }
     }
     
-    // Explicit scroll helper
-    window.LiveChatWidget.scrollToBottom = function() {
-        const container = document.getElementById('messages-container');
-        if (container) {
-            container.scrollTop = container.scrollHeight;
-            state.forceScroll = true; // Ensure next render keeps it
-            
-            // Hide badge
-            const badge = document.getElementById('scroll-badge');
-            if (badge) badge.classList.remove('visible');
-        }
-    };
+
 
     // Send message
     function sendMessage() {
@@ -1885,7 +1874,16 @@
         },
         sendMessage: sendMessage,
         closeProactiveBubble: closeProactiveBubble,
-        markAsRead: markMessagesAsRead
+        markAsRead: markMessagesAsRead,
+        scrollToBottom: function() {
+             const container = document.getElementById('messages-container');
+             if (container) {
+                 container.scrollTop = container.scrollHeight;
+                 state.forceScroll = true; 
+                 const badge = document.getElementById('scroll-badge');
+                 if (badge) badge.classList.remove('visible');
+             }
+        }
     };
 
     function markMessagesAsRead() {
