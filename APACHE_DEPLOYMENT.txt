@@ -1,0 +1,161 @@
+# Apache & SSL Deployment Guide for VisionTechChat
+
+This guide covers how to deploy the application on an Apache server and configure Secure WebSockets (WSS).
+
+---
+
+## 1. Environment Configuration (.env)
+
+On your **Production Server**, edit your `.env` file to enable SSL and set up the WebSocket ports.
+
+```ini
+# App URL (Must start with https://)
+APP_URL=https://your-domain.com
+
+# Database (Production)
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=your_prod_db
+DB_USERNAME=your_prod_user
+DB_PASSWORD=your_prod_password
+
+# Reverb (WebSockets) Configuration
+# ---------------------------------------------
+# REVERB_HOST: The domain where Reverb is reachable (e.g., your-domain.com)
+# REVERB_PORT: 443 (Standard SSL port)
+# REVERB_SCHEME: https
+# ---------------------------------------------
+REVERB_APP_ID=101
+REVERB_APP_KEY=visiontech_live_chat_key
+REVERB_APP_SECRET=visiontech_live_chat_secret
+REVERB_HOST="your-domain.com"
+REVERB_PORT=443
+REVERB_SCHEME=https
+
+# Internal Server Config (Where Reverb listens LOCALLY)
+# Reverb will listen on 8080 locally, and Apache will proxy 443 -> 8080
+REVERB_SERVER_HOST=0.0.0.0
+REVERB_SERVER_PORT=8080
+```
+
+---
+
+## 2. Apache VirtualHost Configuration
+
+You need to configure Apache to serve your Laravel app AND proxy WebSocket traffic to Reverb.
+
+**File:** `/etc/apache2/sites-available/your-domain.com.conf`
+
+```apache
+<VirtualHost *:80>
+    ServerName your-domain.com
+    DocumentRoot /var/www/VisionTechChat/public
+
+    # Redirect HTTP to HTTPS
+    RewriteEngine On
+    RewriteCond %{HTTPS} off
+    RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+</VirtualHost>
+
+<VirtualHost *:443>
+    ServerName your-domain.com
+    DocumentRoot /var/www/VisionTechChat/public
+
+    # SSL Certificates (Let's Encrypt managed by Certbot)
+    SSLEngine on
+    SSLCertificateFile /etc/letsencrypt/live/your-domain.com/fullchain.pem
+    SSLCertificateKeyFile /etc/letsencrypt/live/your-domain.com/privkey.pem
+
+    # Laravel App Config
+    <Directory /var/www/VisionTechChat/public>
+        AllowOverride All
+        Require all granted
+    </Directory>
+
+    # --------------------------------------------------------
+    # WEBSOCKET PROXY (WSS -> Internal Reverb)
+    # --------------------------------------------------------
+    # Any request starting with /app/ is meant for Reverb (WebSockets)
+    # Reverb listens locally on port 8080 (defined in .env REVERB_SERVER_PORT)
+    
+    ProxyPass "/app" "http://127.0.0.1:8080/app"
+    ProxyPassReverse "/app" "http://127.0.0.1:8080/app"
+
+    # Enable WebSocket upgrades
+    RewriteEngine On
+    RewriteCond %{HTTP:Upgrade} =websocket [NC]
+    RewriteRule /(.*)           ws://127.0.0.1:8080/$1 [P,L]
+    # --------------------------------------------------------
+
+    ErrorLog ${APACHE_LOG_DIR}/error.log
+    CustomLog ${APACHE_LOG_DIR}/access.log combined
+</VirtualHost>
+```
+
+**After saving the file:**
+1.  Enable modules: `sudo a2enmod proxy proxy_http proxy_wstunnel rewrite ssl`
+2.  Enable site: `sudo a2ensite your-domain.com.conf`
+3.  Restart Apache: `sudo systemctl restart apache2`
+
+---
+
+## 3. Running the WebSocket Server (Reverb)
+
+You need to keep Reverb running in the background. Use **Supervisor**.
+
+**File:** `/etc/supervisor/conf.d/visiontech-reverb.conf`
+
+```ini
+[program:visiontech-reverb]
+process_name=%(program_name)s
+directory=/var/www/VisionTechChat
+# Listen on port 8080 (internal only)
+command=php artisan reverb:start --host=0.0.0.0 --port=8080
+autostart=true
+autorestart=true
+user=www-data
+redirect_stderr=true
+stdout_logfile=/var/www/VisionTechChat/storage/logs/reverb.log
+```
+
+**Also run the Queue Worker (Critical for Chat Speed):**
+
+**File:** `/etc/supervisor/conf.d/visiontech-queue.conf`
+
+```ini
+[program:visiontech-queue]
+process_name=%(program_name)s
+directory=/var/www/VisionTechChat
+command=php artisan queue:work --sleep=3 --tries=3
+autostart=true
+autorestart=true
+user=www-data
+redirect_stderr=true
+stdout_logfile=/var/www/VisionTechChat/storage/logs/queue.log
+```
+
+**Apply Supervisor Changes:**
+```bash
+sudo supervisorctl reread
+sudo supervisorctl update
+sudo supervisorctl start all
+```
+
+---
+
+## 4. How It Works (The Flow)
+
+1.  **Frontend (Browser)** checks `.env` via API and sees `REVERB_SCHEME=https`.
+2.  **Widget.js** tries to connect to `wss://your-domain.com:443/app/key...`
+3.  **Apache** receives the request on port 443 (SSL).
+4.  **Apache** sees the `/app` path or Upgrade header and **proxies** it internally to `ws://127.0.0.1:8080`.
+5.  **Reverb** (running on 8080) handles the connection and sends events back.
+
+## 5. Summary Checklist
+
+- [ ] Set `REVERB_SCHEME=https` and `REVERB_PORT=443` in `.env`.
+- [ ] Install SSL Cert (Certbot).
+- [ ] Configure Apache Proxy (`ProxyPass` & `RewriteRule`).
+- [ ] Start Reverb on port 8080 via Supervisor.
+- [ ] Clear config cache: `php artisan config:clear`.

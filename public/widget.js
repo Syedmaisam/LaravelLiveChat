@@ -456,6 +456,73 @@
             .live-chat-actions button:hover {
                 background: rgba(255,255,255,0.25);
             }
+            .live-chat-details-form {
+                position: absolute;
+                top: 56px;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: white;
+                display: flex;
+                flex-direction: column;
+                gap: 12px;
+                padding: 24px;
+                justify-content: center;
+                z-index: 10;
+            }
+            .live-chat-details-form h4 {
+                margin: 0 0 16px;
+                color: #333;
+                font-size: 18px;
+                text-align: center;
+            }
+            .live-chat-details-form form {
+                display: flex;
+                flex-direction: column;
+                gap: 12px;
+            }
+            .live-chat-details-form input {
+                padding: 14px;
+                border: 1px solid #ddd;
+                border-radius: 8px;
+                font-size: 14px;
+                color: #333;
+                background: #fff;
+            }
+            .live-chat-details-form input:focus {
+                outline: none;
+                border-color: ${config.widgetColor};
+                box-shadow: 0 0 0 3px ${config.widgetColor}20;
+            }
+            .live-chat-details-form button {
+                padding: 14px;
+                background: ${config.widgetColor};
+                color: white;
+                border: none;
+                border-radius: 8px;
+                cursor: pointer;
+                font-size: 16px;
+                font-weight: 600;
+                margin-top: 8px;
+                transition: all 0.2s ease;
+                box-shadow: 0 2px 8px ${config.widgetColor}40;
+            }
+            .live-chat-details-form button:hover {
+                transform: translateY(-1px);
+                box-shadow: 0 4px 12px ${config.widgetColor}50;
+                filter: brightness(1.05);
+            }
+            .welcome-message {
+                background: #f1f1f1;
+                padding: 12px 16px;
+                border-radius: 18px;
+                margin-bottom: 12px;
+                color: #333;
+                max-width: 85%;
+            }
+            .welcome-message p {
+                margin: 0;
+            }
             .live-chat-body {
                 flex: 1;
                 overflow: hidden; /* Parent shouldn't scroll */
