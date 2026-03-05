@@ -45,9 +45,15 @@
             </div>
         </div>
         <div class="flex items-center gap-3">
-            <span class="px-3 py-1 text-xs rounded-full {{ $chat->status === 'active' ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400' }}">
+            <span class="px-3 py-1 text-xs rounded-full {{ $chat->status === 'active' ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400' }}" id="chat-status-badge">
                 {{ ucfirst($chat->status) }}
             </span>
+            
+            @if($chat->status === 'active')
+            <button onclick="endChat()" id="end-chat-btn" class="px-3 py-1 text-xs rounded-full bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors font-medium">
+                End Chat
+            </button>
+            @endif
             
             <!-- User Menu -->
             <div class="relative" x-data="{ open: false }">
@@ -146,17 +152,23 @@
             <!-- Message Input -->
             <div class="border-t border-[#222] p-4 bg-[#111]">
                 <form id="message-form" class="flex gap-3">
-                    <input type="text" id="message-input" placeholder="Type a message..." 
+                    <input type="text" id="message-input" 
+                        placeholder="{{ $chat->status === 'active' ? 'Type a message...' : 'Chat has been ended' }}" 
+                        {{ $chat->status !== 'active' ? 'disabled' : '' }}
                         class="flex-1 bg-[#222] border border-[#333] rounded-full px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-[#fe9e00]">
-                    <button type="button" id="attach-btn" class="p-2 text-gray-400 hover:text-[#fe9e00]">
+                    <button type="button" id="attach-btn" 
+                        {{ $chat->status !== 'active' ? 'disabled' : '' }}
+                        class="p-2 text-gray-400 hover:text-[#fe9e00] disabled:opacity-50 disabled:cursor-not-allowed">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/>
                         </svg>
                     </button>
-                    <button type="submit" class="bg-[#fe9e00] text-black px-6 py-2 rounded-full font-medium hover:bg-[#e08e00]">
+                    <button type="submit" 
+                        {{ $chat->status !== 'active' ? 'disabled' : '' }}
+                        class="bg-[#fe9e00] text-black px-6 py-2 rounded-full font-medium hover:bg-[#e08e00] disabled:opacity-50 disabled:cursor-not-allowed">
                         Send
                     </button>
-                    <input type="file" id="file-input" style="display: none;" accept="image/*,.pdf,.doc,.docx">
+                    <input type="file" id="file-input" style="display: none;" accept="image/*,.pdf,.doc,.docx" {{ $chat->status !== 'active' ? 'disabled' : '' }}>
                 </form>
             </div>
         </div>
@@ -548,6 +560,42 @@
 
         // Scroll to bottom on load
         document.getElementById('messages-container').scrollTop = document.getElementById('messages-container').scrollHeight;
+
+        // End Chat function
+        function endChat() {
+            if (!confirm('Are you sure you want to end this chat?')) return;
+            
+            fetch('/dashboard/chat/' + chatId + '/close', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+                }
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    // Update status badge
+                    const badge = document.getElementById('chat-status-badge');
+                    if (badge) {
+                        badge.textContent = 'Closed';
+                        badge.className = 'px-3 py-1 text-xs rounded-full bg-red-500/20 text-red-400';
+                    }
+                    // Hide end chat button
+                    const btn = document.getElementById('end-chat-btn');
+                    if (btn) btn.remove();
+                    // Disable message input
+                    const input = document.getElementById('message-input');
+                    if (input) {
+                        input.disabled = true;
+                        input.placeholder = 'Chat has been ended';
+                    }
+                    const sendBtn = document.querySelector('#message-form button[type="submit"]');
+                    if (sendBtn) sendBtn.disabled = true;
+                }
+            })
+            .catch(err => console.error('End chat error:', err));
+        }
     </script>
 </body>
 </html>

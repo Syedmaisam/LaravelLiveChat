@@ -24,6 +24,7 @@ class AgentJoinedChat implements ShouldBroadcast
     {
         return [
             new PrivateChannel('chat.' . $this->chat->id),
+            new Channel('monitoring'),
         ];
     }
 
@@ -36,9 +37,10 @@ class AgentJoinedChat implements ShouldBroadcast
     {
         return [
             'chat_id' => $this->chat->id,
+            'session_id' => $this->chat->visitor_session_id,
             'agent' => [
                 'id' => $this->agent->id,
-                'name' => $this->agent->pseudo_name ?? $this->agent->name,
+                'name' => $this->agent->active_pseudo_name ?? $this->agent->name,
                 'avatar' => $this->agent->avatar,
             ],
         ];

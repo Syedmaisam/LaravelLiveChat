@@ -50,6 +50,9 @@ Route::middleware('auth')->group(function () {
     Route::post('/dashboard/chat/{chat}/label', [\App\Http\Controllers\Dashboard\ChatController::class, 'updateLabel'])->name('dashboard.chat.label');
     Route::get('/dashboard/chat/{chat}/messages', [\App\Http\Controllers\Dashboard\ChatController::class, 'getMessages'])->name('dashboard.chat.messages');
     Route::post('/dashboard/chat/{chat}/read', [DashboardController::class, 'markAsRead'])->name('dashboard.chat.read');
+    
+    // Visitor actions
+    Route::post('/dashboard/visitors/{session}/mark-offline', [DashboardController::class, 'markVisitorOffline'])->name('dashboard.visitor.mark-offline');
     Route::get('/dashboard/chat/{chat}/file/{message}/download', [\App\Http\Controllers\Dashboard\ChatController::class, 'downloadFile'])->name('dashboard.chat.file.download');
     Route::get('/dashboard/message/{message}/download', [\App\Http\Controllers\Dashboard\ChatController::class, 'downloadFile'])->name('dashboard.message.download');
     
