@@ -16,7 +16,9 @@ class VisitorController extends Controller
         $clientId = $request->get('client');
         $tab = $request->get('tab', 'active');
 
-        $query = VisitorSession::with(['visitor', 'client', 'pageVisits'])
+        $query = VisitorSession::with(['visitor', 'client', 'pageVisits', 'chats' => function($q) {
+            $q->where('status', '!=', 'closed')->with('participants');
+        }])
             ->when($clientId, fn($q) => $q->where('client_id', $clientId));
 
         if ($tab === 'active') {

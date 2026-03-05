@@ -61,9 +61,14 @@
         </div>
         <div class="flex items-center gap-3">
             @if(isset($chat) && $chat)
-            <span class="px-3 py-1 text-xs rounded-full {{ $chat->status === 'active' ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400' }}">
+            <span class="px-3 py-1 text-xs rounded-full {{ $chat->status === 'active' ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400' }}" id="chat-status-badge">
                 {{ ucfirst($chat->status) }}
             </span>
+            @if($chat->status === 'active')
+            <button onclick="endChat()" id="end-chat-btn" class="px-3 py-1 text-xs rounded-full bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors font-medium">
+                End Chat
+            </button>
+            @endif
             @endif
             
             <!-- User Menu -->
@@ -206,8 +211,13 @@
                         </div>
                         <div class="flex-1 min-w-0">
                             <div class="flex items-center justify-between">
-                                <h4 class="font-medium truncate">{{ $recentChat->visitor->name ?? 'Anonymous' }}</h4>
-                                @if($recentChat->visitorSession?->is_online)
+                                <h4 class="font-medium truncate flex items-center gap-2">
+                                    {{ $recentChat->visitor->name ?? 'Anonymous' }}
+                                    @if($recentChat->status === 'closed')
+                                        <span class="text-[9px] bg-red-500/10 text-red-500 border border-red-500/20 px-1.5 py-0.5 rounded uppercase font-bold tracking-wider">Closed</span>
+                                    @endif
+                                </h4>
+                                @if($recentChat->visitorSession?->is_online && $recentChat->status !== 'closed')
                                 <span class="w-2 h-2 bg-green-500 rounded-full shrink-0"></span>
                                 @endif
                             </div>
@@ -330,17 +340,23 @@
                         </div>
                     </div>
                     @endif
-                    <input type="text" id="message-input" placeholder="Type a message... (type / for quick replies)" 
+                    <input type="text" id="message-input" 
+                        placeholder="{{ $chat->status === 'active' ? 'Type a message... (type / for quick replies)' : 'Chat has been ended' }}" 
+                        {{ $chat->status !== 'active' ? 'disabled' : '' }}
                         class="flex-1 bg-[#222] border border-[#333] rounded-full px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-[#fe9e00]">
-                    <button type="button" id="attach-btn" class="p-2 text-gray-400 hover:text-[#fe9e00]">
+                    <button type="button" id="attach-btn" 
+                        {{ $chat->status !== 'active' ? 'disabled' : '' }}
+                        class="p-2 text-gray-400 hover:text-[#fe9e00] disabled:opacity-50 disabled:cursor-not-allowed">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/>
                         </svg>
                     </button>
-                    <button type="submit" class="bg-[#fe9e00] text-black px-6 py-2 rounded-full font-medium hover:bg-[#e08e00]">
+                    <button type="submit" 
+                        {{ $chat->status !== 'active' ? 'disabled' : '' }}
+                        class="bg-[#fe9e00] text-black px-6 py-2 rounded-full font-medium hover:bg-[#e08e00] disabled:opacity-50 disabled:cursor-not-allowed">
                         Send
                     </button>
-                    <input type="file" id="file-input" style="display: none;" accept="image/*,.pdf,.doc,.docx">
+                    <input type="file" id="file-input" style="display: none;" accept="image/*,.pdf,.doc,.docx" {{ $chat->status !== 'active' ? 'disabled' : '' }}>
                 </form>
             </div>
             @else
@@ -1080,6 +1096,41 @@
                 }
             })
             .catch(err => console.error('Nickname update error:', err));
+        }
+        // End Chat function
+        function endChat() {
+            if (!confirm('Are you sure you want to end this chat?')) return;
+            
+            fetch('/dashboard/chat/' + chatId + '/close', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+                }
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    // Update status badge
+                    const badge = document.getElementById('chat-status-badge');
+                    if (badge) {
+                        badge.textContent = 'Closed';
+                        badge.className = 'px-3 py-1 text-xs rounded-full bg-red-500/20 text-red-400';
+                    }
+                    // Hide end chat button
+                    const btn = document.getElementById('end-chat-btn');
+                    if (btn) btn.remove();
+                    // Disable message input
+                    const input = document.getElementById('message-input');
+                    if (input) {
+                        input.disabled = true;
+                        input.placeholder = 'Chat has been ended';
+                    }
+                    const sendBtn = document.querySelector('#message-form button[type="submit"]');
+                    if (sendBtn) sendBtn.disabled = true;
+                }
+            })
+            .catch(err => console.error('End chat error:', err));
         }
         @endif
     </script>

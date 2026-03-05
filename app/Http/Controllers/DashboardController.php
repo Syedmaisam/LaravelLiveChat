@@ -193,7 +193,9 @@ class DashboardController extends Controller
 
         $onlineVisitors = VisitorSession::whereIn('client_id', $clientIds)
             ->where('is_online', true)
-            ->with(['visitor', 'client'])
+            ->with(['visitor', 'client', 'chats' => function($q) {
+                $q->where('status', '!=', 'closed')->with('participants');
+            }])
             ->latest('last_activity_at')
             ->get();
 
@@ -409,6 +411,8 @@ class DashboardController extends Controller
                 'read_at' => now(),
             ]);
 
+            $chat->update(['unread_count' => 0]);
+
             // Broadcast read receipt to visitor
             event(new \App\Events\MessagesRead($chat, $messageIds, 'agent'));
         }
@@ -460,6 +464,24 @@ class DashboardController extends Controller
         // Update chat status to active
         $chat->update(['status' => 'active']);
 
+        // Broadcast that the agent joined
+        event(new \App\Events\AgentJoinedChat($chat, $user));
+
         return redirect()->route('inbox.chat', $chat);
+    }
+
+    /**
+     * Mark an active visitor session as offline explicitly
+     */
+    public function markVisitorOffline(VisitorSession $session)
+    {
+        $user = Auth::user();
+        if (!$user->clients()->where('clients.id', $session->client_id)->exists()) {
+            abort(403);
+        }
+        
+        $session->update(['is_online' => false]);
+        
+        return back()->with('success', 'Visitor marked as offline.');
     }
 }

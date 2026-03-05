@@ -77,11 +77,17 @@
                 </a>
                 @endif
 
-                <a href="{{ route('dashboard') }}" class="px-4 py-2 rounded-lg text-sm font-medium transition-all {{ request()->routeIs('dashboard') && !request()->routeIs('dashboard.monitoring') && !request()->routeIs('dashboard.reporting') ? 'bg-[#D4AF37]/10 text-[#D4AF37]' : 'text-gray-400 hover:text-white hover:bg-white/5' }}">
+                <a href="{{ route('dashboard') }}" class="px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center {{ request()->routeIs('dashboard') && !request()->routeIs('dashboard.monitoring') && !request()->routeIs('dashboard.reporting') ? 'bg-[#D4AF37]/10 text-[#D4AF37]' : 'text-gray-400 hover:text-white hover:bg-white/5' }}">
                     Live Chat
+                    @if(isset($navUnreadChatCount) && $navUnreadChatCount > 0)
+                        <span class="ml-1.5 bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">{{ $navUnreadChatCount }}</span>
+                    @endif
                 </a>
-                <a href="{{ route('dashboard.monitoring') }}" class="px-4 py-2 rounded-lg text-sm font-medium transition-all {{ request()->routeIs('dashboard.monitoring') ? 'bg-[#D4AF37]/10 text-[#D4AF37]' : 'text-gray-400 hover:text-white hover:bg-white/5' }}">
+                <a href="{{ route('dashboard.monitoring') }}" class="px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center {{ request()->routeIs('dashboard.monitoring') ? 'bg-[#D4AF37]/10 text-[#D4AF37]' : 'text-gray-400 hover:text-white hover:bg-white/5' }}">
                     Visitors
+                    @if(isset($navVisitorCount) && $navVisitorCount > 0)
+                        <span class="ml-1.5 bg-[#D4AF37] text-black text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">{{ $navVisitorCount }}</span>
+                    @endif
                 </a>
                 <a href="{{ route('dashboard.reporting') }}" class="px-4 py-2 rounded-lg text-sm font-medium transition-all {{ request()->routeIs('dashboard.reporting') ? 'bg-[#D4AF37]/10 text-[#D4AF37]' : 'text-gray-400 hover:text-white hover:bg-white/5' }}">
                     Analytics

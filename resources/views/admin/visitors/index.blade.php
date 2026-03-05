@@ -39,6 +39,7 @@
                 <th class="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Client</th>
                 <th class="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Time</th>
                 <th class="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Pages</th>
+                <th class="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase"></th>
             </tr>
         </thead>
         <tbody class="divide-y divide-[#222]" id="visitors-table">
@@ -59,16 +60,26 @@
                             {{ strtoupper(substr($session->visitor->name ?? 'A', 0, 1)) }}
                         </div>
                         <div>
-                            <div class="font-medium text-sm text-white flex items-center gap-2">
-                                {{ $session->visitor->name ?? 'Anonymous' }}
+                            <div class="font-medium text-sm text-white flex items-center gap-2 flex-wrap">
+                                <span>{{ $session->visitor->name ?? 'Anonymous' }}</span>
                                 @if($session->visitor->country_code)
                                 <img src="https://flagcdn.com/16x12/{{ strtolower($session->visitor->country_code) }}.png" 
                                      alt="{{ $session->visitor->country }}" 
                                      title="{{ $session->visitor->country }}"
                                      class="inline-block">
                                 @endif
+                                @php
+                                    $activeChat = $session->chats->first();
+                                    $firstAgent = $activeChat ? $activeChat->participants->first() : null;
+                                    $agentName = $firstAgent ? ($firstAgent->active_pseudo_name ?? $firstAgent->name) : null;
+                                @endphp
+                                @if($agentName)
+                                    <span class="text-[10px] bg-[#fe9e00]/20 text-[#fe9e00] border border-[#fe9e00]/30 px-1.5 py-0.5 rounded whitespace-nowrap">
+                                        Joined by {{ $agentName }}
+                                    </span>
+                                @endif
                             </div>
-                            <div class="text-xs text-gray-500 flex items-center gap-2">
+                            <div class="text-xs text-gray-500 flex items-center gap-2 mt-0.5">
                                 <span>{{ $session->visitor->city ?? 'Unknown' }}, {{ $session->visitor->country ?? '' }}</span>
                                 @if($session->visitor->os)
                                 <span class="text-gray-600">•</span>
@@ -121,6 +132,16 @@
                 </td>
                 <td class="px-4 py-3 text-sm text-gray-400">{{ $session->started_at->diffForHumans(null, true) }}</td>
                 <td class="px-4 py-3 text-sm text-gray-400">{{ $session->pageVisits->count() }}</td>
+                <td class="px-4 py-3 text-right">
+                    @if($session->is_online)
+                    <form action="{{ route('dashboard.visitor.mark-offline', $session) }}" method="POST" class="inline" onclick="event.stopPropagation();">
+                        @csrf
+                        <button type="submit" title="Mark Offline" class="text-gray-500 hover:text-red-500 transition-colors" onclick="return confirm('Force this visitor offline?')">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/></svg>
+                        </button>
+                    </form>
+                    @endif
+                </td>
             </tr>
             @empty
             <tr>
@@ -425,6 +446,23 @@ document.addEventListener('DOMContentLoaded', function() {
                         // Highlight change
                         pageLink.style.color = '#fff';
                         setTimeout(() => pageLink.style.color = '', 500);
+                    }
+                }
+            });
+            
+            // Agent joined chat
+            monitoringChannel.bind('agent.joined', function(data) {
+                console.log('Agent joined chat:', data);
+                if (data.session_id && '{{ $tab }}' === 'active') {
+                    const row = document.querySelector(`tr[data-session-id="${data.session_id}"]`);
+                    if (row) {
+                        const nameContainer = row.querySelector('td:nth-child(2) > div:first-child');
+                        if (nameContainer && !nameContainer.innerHTML.includes('Joined by')) {
+                            const badge = document.createElement('span');
+                            badge.className = 'text-[10px] bg-[#fe9e00]/20 text-[#fe9e00] border border-[#fe9e00]/30 px-1.5 py-0.5 rounded whitespace-nowrap ml-2';
+                            badge.innerText = `Joined by ${data.agent.name}`;
+                            nameContainer.appendChild(badge);
+                        }
                     }
                 }
             });

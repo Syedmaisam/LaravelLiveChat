@@ -119,8 +119,8 @@
                 </template>
             </div>
 
-            <div class="flex justify-end">
-                <button type="submit" class="px-5 py-2 bg-gradient-to-r from-[#D4AF37] to-[#B8860B] text-black font-medium rounded-lg hover:opacity-90 transition-opacity text-sm">
+            <div class="flex justify-end mt-8">
+                <button type="submit" class="px-6 py-2.5 bg-[#D4AF37] bg-gradient-to-r from-[#D4AF37] to-[#B8860B] text-black font-semibold rounded-lg hover:opacity-90 transition-opacity text-sm shadow-lg" style="background: linear-gradient(to right, #D4AF37, #B8860B) !important; color: #000 !important; font-weight: 600 !important;">
                     Save Changes
                 </button>
             </div>
