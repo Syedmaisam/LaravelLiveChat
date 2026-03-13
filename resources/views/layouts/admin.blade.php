@@ -112,8 +112,31 @@
                     
                     // Also show in-page toast
                     showToast(title, body);
+
+                    // Flash document title
+                    flashTitle(title);
                 };
                 
+                let titleInterval;
+                let originalTitle = document.title;
+                
+                window.flashTitle = function(message) {
+                    clearInterval(titleInterval);
+                    let isOriginal = false;
+                    
+                    titleInterval = setInterval(() => {
+                        document.title = isOriginal ? originalTitle : `🔔 ${message}`;
+                        isOriginal = !isOriginal;
+                    }, 1000);
+                    
+                    // Stop flashing when user focuses the window
+                    window.addEventListener('focus', function stopFlashing() {
+                        clearInterval(titleInterval);
+                        document.title = originalTitle;
+                        window.removeEventListener('focus', stopFlashing);
+                    });
+                };
+
                 window.playNotificationSound = function() {
                     // Create a pleasant two-tone notification sound
                     try {

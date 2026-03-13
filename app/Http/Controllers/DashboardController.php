@@ -234,6 +234,8 @@ class DashboardController extends Controller
             ->limit(20)
             ->get() ?? collect();
 
+        $isParticipant = $chat->participants()->where('user_id', $user->id)->exists();
+
         return view('dashboard.chat', [
             'chat' => $chat->load(['visitor', 'client', 'visitorSession']),
             'messages' => $messages,
@@ -241,6 +243,7 @@ class DashboardController extends Controller
             'files' => $files,
             'pageVisits' => $pageVisits,
             'hasMoreMessages' => $chat->messages()->count() > 50,
+            'isParticipant' => $isParticipant,
         ]);
     }
 
@@ -340,6 +343,8 @@ class DashboardController extends Controller
             ->orderByDesc('total')
             ->get();
 
+        $isParticipant = $chat->participants()->where('user_id', $user->id)->exists();
+
         return view('dashboard.inbox', [
             'chat' => $chat->load(['visitor', 'client', 'visitorSession']),
             'messages' => $chat->messages()->with('sender')->orderBy('created_at', 'desc')->orderBy('id', 'desc')->limit(50)->get()->sortBy('id')->values(),
@@ -351,6 +356,7 @@ class DashboardController extends Controller
             'recentChats' => $recentChats,
             'clients' => $clients,
             'countries' => $countries,
+            'isParticipant' => $isParticipant,
         ]);
     }
 
@@ -374,11 +380,8 @@ class DashboardController extends Controller
                 'visitor_id' => $session->visitor_id,
                 'client_id' => $session->client_id,
                 'visitor_session_id' => $session->id,
-                'status' => 'active',
+                'status' => 'waiting',
             ]);
-
-            // Add current user as participant
-            $chat->participants()->attach($user->id);
         }
 
         // Redirect to inbox with this chat
@@ -448,24 +451,11 @@ class DashboardController extends Controller
                 'client_id' => $session->client_id,
                 'visitor_id' => $session->visitor_id,
                 'visitor_session_id' => $session->id,
-                'status' => 'active',
+                'status' => 'waiting',
                 'lead_form_filled' => $session->visitor->email ? true : false,
                 'started_at' => now(),
             ]);
         }
-
-        // Add agent as participant if not already
-        if (!$chat->participants()->where('user_id', $user->id)->exists()) {
-            $chat->participants()->attach($user->id, [
-                'joined_at' => now(),
-            ]);
-        }
-
-        // Update chat status to active
-        $chat->update(['status' => 'active']);
-
-        // Broadcast that the agent joined
-        event(new \App\Events\AgentJoinedChat($chat, $user));
 
         return redirect()->route('inbox.chat', $chat);
     }

@@ -34,13 +34,20 @@ class UserController extends Controller
             'role' => 'required|exists:roles,id',
             'manager_id' => 'nullable|exists:users,id',
             'clients' => 'nullable|array',
+            'pseudo_names' => 'nullable|array',
+            'pseudo_names.*' => 'nullable|string|max:100',
+            'active_pseudo_name' => 'nullable|string|max:100',
         ]);
+
+        $pseudoNames = array_filter($validated['pseudo_names'] ?? [], fn($name) => !empty(trim($name)));
 
         $user = User::create([
             'name' => $validated['name'],
             'email' => $validated['email'],
             'password' => Hash::make($validated['password']),
             'manager_id' => $validated['manager_id'],
+            'pseudo_names' => array_values($pseudoNames),
+            'active_pseudo_name' => $validated['active_pseudo_name'] ?: (count($pseudoNames) > 0 ? $pseudoNames[0] : null),
         ]);
 
         $user->roles()->attach($validated['role']);
@@ -69,12 +76,19 @@ class UserController extends Controller
             'role' => 'required|exists:roles,id',
             'manager_id' => 'nullable|exists:users,id',
             'clients' => 'nullable|array',
+            'pseudo_names' => 'nullable|array',
+            'pseudo_names.*' => 'nullable|string|max:100',
+            'active_pseudo_name' => 'nullable|string|max:100',
         ]);
+
+        $pseudoNames = array_filter($validated['pseudo_names'] ?? [], fn($name) => !empty(trim($name)));
 
         $user->update([
             'name' => $validated['name'],
             'email' => $validated['email'],
             'manager_id' => $validated['manager_id'],
+            'pseudo_names' => array_values($pseudoNames),
+            'active_pseudo_name' => $validated['active_pseudo_name'] ?: (count($pseudoNames) > 0 ? $pseudoNames[0] : null),
         ]);
 
         if (!empty($validated['password'])) {

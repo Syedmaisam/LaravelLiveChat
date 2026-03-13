@@ -154,12 +154,30 @@ class ChatController extends Controller
         return response()->json(['success' => true]);
     }
 
-    public function joinChat(Chat $chat)
+    public function joinChat(Request $request, Chat $chat)
     {
         $user = Auth::user();
 
         if (!$user->clients()->where('clients.id', $chat->client_id)->exists()) {
             return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
+        $request->validate([
+            'pseudo_name' => 'required|string|max:100',
+        ]);
+
+        $pseudoName = $request->input('pseudo_name');
+
+        // Update user's pseudo names if new
+        $pseudoNames = $user->pseudo_names ?? [];
+        if (!in_array($pseudoName, $pseudoNames)) {
+            $pseudoNames[] = $pseudoName;
+            $user->update([
+                'pseudo_names' => array_values(array_filter($pseudoNames)),
+                'active_pseudo_name' => $pseudoName,
+            ]);
+        } else {
+            $user->update(['active_pseudo_name' => $pseudoName]);
         }
 
         $participant = ChatParticipant::firstOrCreate(
@@ -169,8 +187,14 @@ class ChatController extends Controller
             ],
             [
                 'joined_at' => now(),
+                'agent_nickname' => $pseudoName,
             ]
         );
+
+        // Update nickname if already existed
+        if (!$participant->wasRecentlyCreated) {
+            $participant->update(['agent_nickname' => $pseudoName]);
+        }
 
         if ($chat->status === 'waiting') {
             $chat->update(['status' => 'active']);
