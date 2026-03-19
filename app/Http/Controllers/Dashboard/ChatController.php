@@ -20,7 +20,7 @@ class ChatController extends Controller
         $user = Auth::user();
 
         // Verify agent has access
-        if (!$user->clients()->where('clients.id', $chat->client_id)->exists()) {
+        if (!$user->isAdmin() && !$user->clients()->where('clients.id', $chat->client_id)->exists()) {
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
@@ -84,7 +84,7 @@ class ChatController extends Controller
     {
         $user = Auth::user();
 
-        if (!$user->clients()->where('clients.id', $chat->client_id)->exists()) {
+        if (!$user->isAdmin() && !$user->clients()->where('clients.id', $chat->client_id)->exists()) {
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
@@ -145,7 +145,7 @@ class ChatController extends Controller
     {
         $user = Auth::user();
 
-        if (!$user->clients()->where('clients.id', $chat->client_id)->exists()) {
+        if (!$user->isAdmin() && !$user->clients()->where('clients.id', $chat->client_id)->exists()) {
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
@@ -158,7 +158,7 @@ class ChatController extends Controller
     {
         $user = Auth::user();
 
-        if (!$user->clients()->where('clients.id', $chat->client_id)->exists()) {
+        if (!$user->isAdmin() && !$user->clients()->where('clients.id', $chat->client_id)->exists()) {
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 

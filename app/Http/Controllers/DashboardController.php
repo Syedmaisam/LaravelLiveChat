@@ -208,8 +208,8 @@ class DashboardController extends Controller
     {
         $user = Auth::user();
 
-        // Verify agent has access
-        if (!$user->clients()->where('clients.id', $chat->client_id)->exists()) {
+        // Verify agent has access (Admins can view all)
+        if (!$user->isAdmin() && !$user->clients()->where('clients.id', $chat->client_id)->exists()) {
             abort(403);
         }
 
@@ -251,8 +251,8 @@ class DashboardController extends Controller
     {
         $user = Auth::user();
 
-        // Verify agent has access
-        if (!$user->clients()->where('clients.id', $chat->client_id)->exists()) {
+        // Verify agent has access (Admins can view all)
+        if (!$user->isAdmin() && !$user->clients()->where('clients.id', $chat->client_id)->exists()) {
             abort(403);
         }
 
