@@ -1418,6 +1418,27 @@
                     showTypingIndicator();
                 });
 
+                channel.bind('chat.closed', function(data) {
+                    // Show system message
+                    state.messages.push({
+                        id: 'system-closed',
+                        sender_type: 'system',
+                        message_type: 'text',
+                        message: 'Chat has been ended by the agent.',
+                        created_at: new Date().toISOString()
+                    });
+                    renderMessages();
+                    // Disable input
+                    state.chatClosed = true;
+                    const input = document.getElementById('chat-input');
+                    if (input) {
+                        input.disabled = true;
+                        input.placeholder = 'Chat has ended';
+                    }
+                    const sendBtn = document.getElementById('send-btn');
+                    if (sendBtn) sendBtn.disabled = true;
+                });
+
                 channel.bind('messages.read', function(data) {
                     if (data.reader_type === 'agent') {
                         data.message_ids.forEach(id => {

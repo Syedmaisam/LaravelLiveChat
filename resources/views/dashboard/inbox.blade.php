@@ -16,9 +16,16 @@
         * { font-family: 'Inter', sans-serif; }
         .messages-container { scroll-behavior: smooth; }
         .message-bubble { word-break: break-word; }
+        @keyframes slideIn { from { transform: translateX(110%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        @keyframes slideOut { from { transform: translateX(0); opacity: 1; } to { transform: translateX(110%); opacity: 0; } }
+        .toast-slide-in { animation: slideIn 0.35s ease-out forwards; }
+        .toast-slide-out { animation: slideOut 0.3s ease-in forwards; }
     </style>
 </head>
 <body class="bg-black text-white h-screen flex flex-col">
+    <!-- Toast Notification Container -->
+    <div id="toast-container" class="fixed top-4 right-4 z-[100] flex flex-col gap-3 pointer-events-none" style="max-width: 380px;"></div>
+
     <!-- Top Header -->
     <header class="bg-[#111] border-b border-[#222] px-4 py-3 flex items-center justify-between shrink-0">
         <div class="flex items-center gap-4">
@@ -103,6 +110,76 @@
     <!-- Alpine.js for dropdown -->
     <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
 
+
+    <!-- Connection Banner -->
+    <div id="connection-banner" class="hidden bg-yellow-500/20 border-b border-yellow-500/30 px-4 py-2 text-center text-yellow-400 text-sm shrink-0">
+        <span class="animate-pulse">Reconnecting to server...</span>
+    </div>
+
+    <!-- Ringing Banner for new waiting chats -->
+    <div id="ringing-banner" class="hidden bg-green-500/20 border-b border-green-500/40 px-4 py-3 text-center shrink-0 cursor-pointer hover:bg-green-500/30 transition-colors"
+         onclick="document.querySelector('[data-ringing-chat]')?.click(); stopRinging();">
+        <div class="flex items-center justify-center gap-3">
+            <span class="relative flex h-3 w-3">
+                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                <span class="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
+            </span>
+            <span class="ringing-text text-green-400 font-medium text-sm">1 new chat waiting — click to answer</span>
+            <span class="relative flex h-3 w-3">
+                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                <span class="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
+            </span>
+        </div>
+    </div>
+
+    @if(!Auth::user()->active_pseudo_name)
+    <!-- Pseudo Name Setup Modal -->
+    <div id="pseudo-name-setup-modal" class="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
+        <div class="bg-[#111] border border-[#333] rounded-xl w-full max-w-md overflow-hidden">
+            <div class="p-4 border-b border-[#222]">
+                <h3 class="text-lg font-semibold text-white">Set Your Display Name</h3>
+            </div>
+            <div class="p-6">
+                <p class="text-sm text-gray-400 mb-2">Before you start chatting, choose a display name that visitors will see.</p>
+                <p class="text-xs text-gray-500 mb-6">This helps keep your real identity private. You can change it anytime in Profile Settings.</p>
+                <form id="pseudo-name-setup-form" onsubmit="event.preventDefault(); savePseudoName(this);">
+                    <label class="block text-sm font-medium text-gray-400 mb-2">Display Name</label>
+                    <input type="text" name="pseudo_name" placeholder="e.g. Support Sarah, Tech Tom" required
+                        class="w-full bg-[#222] border border-[#333] rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-[#fe9e00] mb-4">
+                    <button type="submit" id="pseudo-name-save-btn"
+                        class="w-full bg-[#fe9e00] text-black py-2.5 rounded-lg font-semibold hover:bg-[#e08e00] transition-colors">
+                        Save & Continue
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+    <script>
+        function savePseudoName(form) {
+            const btn = form.querySelector('#pseudo-name-save-btn');
+            const name = form.querySelector('input[name="pseudo_name"]').value.trim();
+            if (!name) return;
+            btn.disabled = true;
+            btn.textContent = 'Saving...';
+            fetch('{{ route("profile.add.nickname") }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+                },
+                body: JSON.stringify({ nickname: name, set_active: true })
+            })
+            .then(res => res.json())
+            .then(data => {
+                document.getElementById('pseudo-name-setup-modal').remove();
+            })
+            .catch(() => {
+                btn.disabled = false;
+                btn.textContent = 'Save & Continue';
+            });
+        }
+    </script>
+    @endif
 
     <!-- Main Content -->
     <div class="flex-1 flex overflow-hidden">
@@ -540,6 +617,21 @@
             }
         });
 
+        // Handle connection state changes
+        let wasDisconnected = false;
+        pusher.connection.bind('state_change', function(states) {
+            const banner = document.getElementById('connection-banner');
+            if (states.current === 'connected') {
+                banner.classList.add('hidden');
+                if (wasDisconnected) {
+                    window.location.reload();
+                }
+            } else if (states.current === 'disconnected' || states.current === 'unavailable') {
+                banner.classList.remove('hidden');
+                wasDisconnected = true;
+            }
+        });
+
         // Subscribe to agent private channel for notifications
         const userId = {{ Auth::id() }};
         console.log('Subscribing to private-agent.' + userId);
@@ -564,6 +656,18 @@
         monitoringChannel.bind('visitor.joined', function(data) {
              console.log('New visitor joined:', data);
              playNotificationSound();
+
+             // In-app slider notification
+             const visitorName = data.visitor?.name || 'Anonymous';
+             const country = data.visitor?.location?.country || 'Unknown';
+             const sessionId = data.session?.id;
+             showToast({
+                 title: 'New Visitor',
+                 body: `${visitorName} from ${country}`,
+                 icon: (visitorName).substring(0,2).toUpperCase(),
+                 onClick: sessionId ? function() { initiateChat(sessionId); } : null,
+             });
+
              if ('Notification' in window && Notification.permission === 'granted') {
                  const notification = new Notification('New Visitor 🔔', {
                      body: `New visitor from ${data.visitor.location.country || 'Unknown'}`,
@@ -617,8 +721,16 @@
                  }
             });
 
+            // Stop ringing when agent joins a chat (broadcast from AgentJoinedChat event)
+            monitoringChannel.bind('agent.joined', function(data) {
+                if (data.chat_id) {
+                    stopRinging(data.chat_id);
+                }
+            });
+
             // Function to initiate chat via POST
             window.initiateChat = function(sessionId) {
+                stopRinging(); // Stop all ringing when navigating to a chat
                 const form = document.createElement('form');
                 form.method = 'POST';
                 form.action = '/inbox/session/' + sessionId;
@@ -672,11 +784,55 @@
                          newItem.classList.remove('bg-[#fe9e00]/20');
                      }, 2000);
                      
-                     playNotificationSound();
+                     // Start ringing for waiting chats
+                     if (data.chat.status === 'waiting') {
+                         newItem.setAttribute('data-ringing-chat', data.chat.id);
+                         startRinging(data.chat.id);
+                         showToast({
+                             title: 'New Chat Waiting',
+                             body: `${data.visitor.name || 'Anonymous'} is waiting for an agent`,
+                             icon: (data.visitor.name || 'A').substring(0,2).toUpperCase(),
+                             onClick: function() { window.location.href = chatUrl; },
+                             duration: 10000,
+                         });
+                     } else {
+                         playNotificationSound();
+                     }
                  } else {
                     // Update existing item info
                     const nameEl = existingItem.querySelector('h4');
                     if (nameEl) nameEl.textContent = data.visitor.name || 'Anonymous';
+                 }
+
+                 // Also add/update in All Chats tab
+                 const allList = document.getElementById('list-all');
+                 const allItemId = 'chat-item-' + data.chat.id;
+                 let allExisting = document.getElementById(allItemId);
+                 // Only add if not already in the list (it may already exist from page load)
+                 if (!allExisting && allList) {
+                     const allEmpty = allList.querySelector('.text-center');
+                     if (allEmpty && allEmpty.innerText.includes('No chats')) allEmpty.remove();
+                     const div = document.createElement('div');
+                     div.innerHTML = `
+                        <a href="${chatUrl}" id="${allItemId}" class="block p-4 border-b border-[#222] hover:bg-[#1a1a1a] transition-colors duration-1000 ease-out bg-[#fe9e00]/20">
+                            <div class="flex items-start gap-3">
+                                <div class="w-10 h-10 bg-[#fe9e00]/20 rounded-full flex items-center justify-center shrink-0">
+                                    <span class="text-[#fe9e00] font-semibold text-sm">${(data.visitor.name || 'A').substring(0,2).toUpperCase()}</span>
+                                </div>
+                                <div class="flex-1 min-w-0">
+                                    <div class="flex items-center justify-between">
+                                        <h4 class="font-medium truncate">${data.visitor.name || 'Anonymous'}</h4>
+                                        <span class="w-2 h-2 bg-green-500 rounded-full shrink-0"></span>
+                                    </div>
+                                    <p class="text-xs text-gray-500 truncate">${data.chat.client_name || 'Client'}</p>
+                                    <p class="text-sm text-gray-400 truncate mt-1">Just now</p>
+                                </div>
+                            </div>
+                        </a>
+                     `;
+                     const newAllItem = div.firstElementChild;
+                     allList.insertBefore(newAllItem, allList.firstChild);
+                     setTimeout(() => newAllItem.classList.remove('bg-[#fe9e00]/20'), 2000);
                  }
              }
         });
@@ -684,15 +840,16 @@
         monitoringChannel.bind('status.changed', function(data) {
              console.log('Status changed:', data);
              if (!data.is_online) {
-                 // Remove from list if offline
-                 // Use data-visitor-id to find the element (works for both session items and chat items)
-                 const items = document.querySelectorAll(`[data-visitor-id="${data.visitor_id}"]`);
+                 // Remove from Active Visitors list
+                 const items = document.querySelectorAll(`#list-active [data-visitor-id="${data.visitor_id}"]`);
                  items.forEach(item => {
-                     // Add fade out effect
                      item.style.transition = 'opacity 0.5s, height 0.5s';
                      item.style.opacity = '0';
                      setTimeout(() => item.remove(), 500);
                  });
+                 // Update green dots in All Chats list (remove online indicator)
+                 const allItems = document.querySelectorAll('#list-all .bg-green-500.rounded-full');
+                 // We can't easily match by visitor_id in All Chats, so this is best-effort
              }
          });
 
@@ -710,10 +867,13 @@
             
             if (!isMe) {
                 addMessage(data);
-                // Play notification sound
                 playNotificationSound();
                 if (document.visibilityState === 'visible') {
                     markAsRead();
+                } else {
+                    // Update tab title with unread count
+                    window.unreadCount = (window.unreadCount || 0) + 1;
+                    document.title = `(${window.unreadCount}) Live Chat`;
                 }
             }
         });
@@ -753,6 +913,51 @@
             showTyping();
         });
 
+        chatChannel.bind('chat.closed', function(data) {
+            // Update status badge
+            const badge = document.getElementById('chat-status-badge');
+            if (badge) {
+                badge.textContent = 'Closed';
+                badge.className = 'px-3 py-1 text-xs rounded-full bg-red-500/20 text-red-400';
+            }
+            // Remove end chat button
+            const endBtn = document.getElementById('end-chat-btn');
+            if (endBtn) endBtn.remove();
+            // Disable message input
+            const input = document.getElementById('message-input');
+            if (input) {
+                input.disabled = true;
+                input.placeholder = 'Chat has been ended';
+            }
+            const sendBtn = document.querySelector('#message-form button[type="submit"]');
+            if (sendBtn) sendBtn.disabled = true;
+            const attachBtn = document.getElementById('attach-btn');
+            if (attachBtn) attachBtn.disabled = true;
+            // Show system message
+            const container = document.getElementById('messages-container');
+            const sysMsg = document.createElement('div');
+            sysMsg.className = 'mb-4 flex justify-center';
+            sysMsg.innerHTML = `<span class="bg-[#222] text-gray-400 px-4 py-1.5 rounded-full text-xs">Chat ended by ${data.ended_by || 'agent'}</span>`;
+            const typingIndicator = document.getElementById('typing-indicator');
+            if (typingIndicator) {
+                container.insertBefore(sysMsg, typingIndicator);
+            } else {
+                container.appendChild(sysMsg);
+            }
+            container.scrollTop = container.scrollHeight;
+            // Update sidebar item
+            const sidebarItem = document.getElementById('chat-item-' + data.chat_id);
+            if (sidebarItem) {
+                const nameEl = sidebarItem.querySelector('h4');
+                if (nameEl && !nameEl.querySelector('.closed-badge')) {
+                    nameEl.insertAdjacentHTML('afterbegin', '<span class="closed-badge text-[9px] bg-red-500/10 text-red-500 border border-red-500/20 px-1.5 py-0.5 rounded uppercase font-bold tracking-wider mr-2">Closed</span>');
+                }
+                // Remove green dot
+                const dot = sidebarItem.querySelector('.bg-green-500.rounded-full');
+                if (dot) dot.remove();
+            }
+        });
+
         // Subscribe to visitor session status changes
         @if($chat->visitorSession)
         const sessionChannel = pusher.subscribe('visitor-session.{{ $chat->visitorSession->id }}');
@@ -782,9 +987,12 @@
         function addMessage(msg) {
             console.log('Adding message:', msg);
             const container = document.getElementById('messages-container');
+            // Skip if message already exists (avoid duplicates from optimistic + WebSocket)
+            if (msg.id && document.querySelector(`[data-msg-id="${msg.id}"]`)) return;
             const isVisitor = msg.sender_type === 'visitor';
             const div = document.createElement('div');
             div.className = 'mb-4 flex ' + (isVisitor ? 'justify-start' : 'justify-end');
+            div.setAttribute('data-msg-id', msg.id);
             
             let messageContent = '';
             if (msg.message_type === 'file') {
@@ -865,21 +1073,131 @@
                 if (ctx.state === 'suspended') {
                     ctx.resume();
                 }
-                
+
                 const oscillator = ctx.createOscillator();
                 const gainNode = ctx.createGain();
-                
+
                 oscillator.connect(gainNode);
                 gainNode.connect(ctx.destination);
-                
+
                 oscillator.frequency.value = 800;
                 oscillator.type = 'sine';
                 gainNode.gain.value = 0.1;
-                
+
                 oscillator.start();
                 setTimeout(() => oscillator.stop(), 150);
             } catch (e) {
                 console.log('Could not play notification sound:', e);
+            }
+        }
+
+        // In-app slider toast notification
+        function showToast({ title, body, icon, onClick, duration = 6000 }) {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = 'toast-slide-in pointer-events-auto cursor-pointer bg-[#1a1a1a] border border-[#333] rounded-xl shadow-2xl p-4 flex items-start gap-3';
+            toast.innerHTML = `
+                <div class="w-10 h-10 bg-[#fe9e00]/20 rounded-full flex items-center justify-center shrink-0">
+                    <span class="text-[#fe9e00] font-semibold text-sm">${icon || '👤'}</span>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <p class="text-sm font-semibold text-white">${title}</p>
+                    <p class="text-xs text-gray-400 mt-0.5 truncate">${body}</p>
+                </div>
+                <button class="text-gray-500 hover:text-white shrink-0 mt-0.5" onclick="event.stopPropagation(); this.closest('.toast-slide-in, .toast-slide-out').classList.add('toast-slide-out'); setTimeout(() => this.closest('.toast-slide-in, .toast-slide-out')?.remove(), 300);">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+            `;
+            if (onClick) {
+                toast.addEventListener('click', function() {
+                    onClick();
+                    toast.classList.add('toast-slide-out');
+                    setTimeout(() => toast.remove(), 300);
+                });
+            }
+            container.appendChild(toast);
+            // Auto-dismiss
+            setTimeout(() => {
+                if (toast.parentNode) {
+                    toast.classList.add('toast-slide-out');
+                    setTimeout(() => toast.remove(), 300);
+                }
+            }, duration);
+        }
+
+        // Ringing system for new waiting chats
+        let ringingInterval = null;
+        let ringingChats = new Set();
+
+        function playRingTone() {
+            try {
+                const ctx = initAudioContext();
+                if (ctx.state === 'suspended') ctx.resume();
+
+                // Two-tone ring pattern (like a phone)
+                const now = ctx.currentTime;
+                for (let i = 0; i < 2; i++) {
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+                    osc.frequency.value = i === 0 ? 440 : 520;
+                    osc.type = 'sine';
+                    gain.gain.setValueAtTime(0, now);
+                    // Ring on
+                    gain.gain.linearRampToValueAtTime(0.15, now + 0.02);
+                    gain.gain.setValueAtTime(0.15, now + 0.4);
+                    gain.gain.linearRampToValueAtTime(0, now + 0.42);
+                    // Ring on again
+                    gain.gain.linearRampToValueAtTime(0.15, now + 0.6);
+                    gain.gain.setValueAtTime(0.15, now + 1.0);
+                    gain.gain.linearRampToValueAtTime(0, now + 1.02);
+                    osc.start(now);
+                    osc.stop(now + 1.1);
+                }
+            } catch (e) {
+                console.log('Could not play ring tone:', e);
+            }
+        }
+
+        function startRinging(chatId) {
+            ringingChats.add(chatId);
+            updateRingingBanner();
+            if (!ringingInterval) {
+                playRingTone();
+                ringingInterval = setInterval(() => {
+                    if (ringingChats.size > 0) {
+                        playRingTone();
+                    } else {
+                        stopRinging();
+                    }
+                }, 3000);
+            }
+        }
+
+        function stopRinging(chatId) {
+            if (chatId) {
+                ringingChats.delete(chatId);
+            } else {
+                ringingChats.clear();
+            }
+            if (ringingChats.size === 0 && ringingInterval) {
+                clearInterval(ringingInterval);
+                ringingInterval = null;
+            }
+            updateRingingBanner();
+        }
+
+        function updateRingingBanner() {
+            const banner = document.getElementById('ringing-banner');
+            if (!banner) return;
+            if (ringingChats.size > 0) {
+                const count = ringingChats.size;
+                banner.querySelector('.ringing-text').textContent =
+                    count === 1 ? '1 new chat waiting — click to answer' : `${count} new chats waiting — click to answer`;
+                banner.classList.remove('hidden');
+            } else {
+                banner.classList.add('hidden');
             }
         }
 
@@ -918,6 +1236,20 @@
             const message = input.value.trim();
             if (!message) return;
 
+            // Optimistic UI: show message immediately
+            const tempId = 'temp-' + Date.now();
+            const selectedNickname = document.getElementById('selected-nickname');
+            const senderName = selectedNickname ? selectedNickname.textContent : '{{ Auth::user()->active_pseudo_name ?? Auth::user()->name }}';
+            addMessage({
+                id: tempId,
+                sender_type: 'agent',
+                message_type: 'text',
+                message: message,
+                sender_name: senderName,
+                created_at: new Date().toISOString()
+            });
+            input.value = '';
+
             fetch('/api/agent/chat/' + chatId + '/message', {
                 method: 'POST',
                 headers: {
@@ -928,10 +1260,22 @@
             })
             .then(res => res.json())
             .then(data => {
-                input.value = '';
-                addMessage(data.message);
+                // Update temp message with real ID for read receipt tracking
+                const tempEl = document.querySelector(`[data-msg-id="${tempId}"]`);
+                if (tempEl) tempEl.setAttribute('data-msg-id', data.message.id);
+                const statusEl = document.getElementById('msg-status-' + tempId);
+                if (statusEl) statusEl.id = 'msg-status-' + data.message.id;
             })
-            .catch(err => console.error('Send error:', err));
+            .catch(err => {
+                console.error('Send error:', err);
+                // Mark message as failed
+                const tempEl = document.querySelector(`[data-msg-id="${tempId}"]`);
+                if (tempEl) {
+                    const bubble = tempEl.querySelector('.message-bubble');
+                    if (bubble) bubble.classList.add('opacity-50');
+                    tempEl.insertAdjacentHTML('beforeend', '<p class="text-xs text-red-400 text-right mt-1">Failed to send</p>');
+                }
+            });
         });
         
         // File upload
@@ -979,6 +1323,8 @@
         document.addEventListener('visibilitychange', function() {
             if (document.visibilityState === 'visible') {
                 markAsRead();
+                window.unreadCount = 0;
+                document.title = @json(isset($chat) && $chat ? "Chat #{$chat->id} - " . ($chat->visitor->name ?? 'Anonymous') : 'Live Chat');
             }
         });
 

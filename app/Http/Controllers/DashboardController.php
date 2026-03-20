@@ -29,8 +29,8 @@ class DashboardController extends Controller
             $search = $request->search;
             $query->whereHas('visitor', function ($q) use ($search) {
                 $q->where('name', 'like', "%{$search}%")
-                  ->orWhere('email', 'like', "%{$search}%")
-                  ->orWhere('phone', 'like', "%{$search}%");
+                    ->orWhere('email', 'like', "%{$search}%")
+                    ->orWhere('phone', 'like', "%{$search}%");
             });
         }
 
@@ -54,6 +54,7 @@ class DashboardController extends Controller
             ->get()
             ->map(function ($chat) {
                 $lastMsg = $chat->messages->first();
+
                 return [
                     'id' => $chat->id,
                     'uuid' => $chat->uuid,
@@ -101,7 +102,7 @@ class DashboardController extends Controller
             ->groupBy('visitors.country_code', 'visitors.country')
             ->orderByDesc('total')
             ->get();
-            
+
         return compact('waitingChats', 'activeChats', 'clientIds', 'allChats', 'countries', 'clients');
     }
 
@@ -113,7 +114,7 @@ class DashboardController extends Controller
         // Active visitors (all online sessions, with or without chats)
         $activeVisitorsQuery = VisitorSession::whereIn('client_id', $clientIds)
             ->where('is_online', true)
-            ->with(['visitor', 'chats' => function($q) {
+            ->with(['visitor', 'chats' => function ($q) {
                 $q->latest('last_message_at')->limit(1);
             }]);
 
@@ -126,13 +127,13 @@ class DashboardController extends Controller
             $search = $request->search;
             $recentChatsQuery->whereHas('visitor', function ($q) use ($search) {
                 $q->where('name', 'like', "%{$search}%")
-                  ->orWhere('email', 'like', "%{$search}%")
-                  ->orWhere('phone', 'like', "%{$search}%");
+                    ->orWhere('email', 'like', "%{$search}%")
+                    ->orWhere('phone', 'like', "%{$search}%");
             });
             // Also filter active visitors if searching
-             $activeVisitorsQuery->whereHas('visitor', function ($q) use ($search) {
+            $activeVisitorsQuery->whereHas('visitor', function ($q) use ($search) {
                 $q->where('name', 'like', "%{$search}%")
-                  ->orWhere('email', 'like', "%{$search}%");
+                    ->orWhere('email', 'like', "%{$search}%");
             });
         }
 
@@ -148,7 +149,7 @@ class DashboardController extends Controller
             $recentChatsQuery->whereHas('visitor', function ($q) use ($country) {
                 $q->where('country_code', $country);
             });
-             $activeVisitorsQuery->whereHas('visitor', function ($q) use ($country) {
+            $activeVisitorsQuery->whereHas('visitor', function ($q) use ($country) {
                 $q->where('country_code', $country);
             });
         }
@@ -193,7 +194,7 @@ class DashboardController extends Controller
 
         $onlineVisitors = VisitorSession::whereIn('client_id', $clientIds)
             ->where('is_online', true)
-            ->with(['visitor', 'client', 'chats' => function($q) {
+            ->with(['visitor', 'client', 'chats' => function ($q) {
                 $q->where('status', '!=', 'closed')->with('participants');
             }])
             ->latest('last_activity_at')
@@ -209,7 +210,7 @@ class DashboardController extends Controller
         $user = Auth::user();
 
         // Verify agent has access (Admins can view all)
-        if (!$user->isAdmin() && !$user->clients()->where('clients.id', $chat->client_id)->exists()) {
+        if (! $user->isAdmin() && ! $user->clients()->where('clients.id', $chat->client_id)->exists()) {
             abort(403);
         }
 
@@ -252,7 +253,7 @@ class DashboardController extends Controller
         $user = Auth::user();
 
         // Verify agent has access (Admins can view all)
-        if (!$user->isAdmin() && !$user->clients()->where('clients.id', $chat->client_id)->exists()) {
+        if (! $user->isAdmin() && ! $user->clients()->where('clients.id', $chat->client_id)->exists()) {
             abort(403);
         }
 
@@ -280,9 +281,9 @@ class DashboardController extends Controller
         // Active visitors (all online sessions, with or without chats)
         $activeVisitorsQuery = VisitorSession::whereIn('client_id', $clientIds)
             ->where('is_online', true)
-            ->with(['visitor.chats' => function($q) {
+            ->with(['visitor.chats' => function ($q) {
                 $q->whereIn('status', ['active', 'waiting'])->latest('last_message_at');
-            }, 'chats' => function($q) {
+            }, 'chats' => function ($q) {
                 $q->latest('last_message_at')->limit(1);
             }]);
 
@@ -297,13 +298,13 @@ class DashboardController extends Controller
             $search = $request->search;
             $recentChatsQuery->whereHas('visitor', function ($q) use ($search) {
                 $q->where('name', 'like', "%{$search}%")
-                  ->orWhere('email', 'like', "%{$search}%")
-                  ->orWhere('phone', 'like', "%{$search}%");
+                    ->orWhere('email', 'like', "%{$search}%")
+                    ->orWhere('phone', 'like', "%{$search}%");
             });
             // Also filter active visitors if searching
-             $activeVisitorsQuery->whereHas('visitor', function ($q) use ($search) {
+            $activeVisitorsQuery->whereHas('visitor', function ($q) use ($search) {
                 $q->where('name', 'like', "%{$search}%")
-                  ->orWhere('email', 'like', "%{$search}%");
+                    ->orWhere('email', 'like', "%{$search}%");
             });
         }
 
@@ -319,7 +320,7 @@ class DashboardController extends Controller
             $recentChatsQuery->whereHas('visitor', function ($q) use ($country) {
                 $q->where('country_code', $country);
             });
-             $activeVisitorsQuery->whereHas('visitor', function ($q) use ($country) {
+            $activeVisitorsQuery->whereHas('visitor', function ($q) use ($country) {
                 $q->where('country_code', $country);
             });
         }
@@ -365,16 +366,16 @@ class DashboardController extends Controller
         $user = Auth::user();
 
         // Verify agent has access to this client
-        if (!$user->clients()->where('clients.id', $session->client_id)->exists()) {
+        if (! $user->clients()->where('clients.id', $session->client_id)->exists()) {
             abort(403);
         }
 
         // Check if chat already exists for this session
         $chat = Chat::where('visitor_session_id', $session->id)->first();
 
-        \Log::info("initiateFromSession called", ['method' => request()->method(), 'session_id' => $session->id]);
+        \Log::info('initiateFromSession called', ['method' => request()->method(), 'session_id' => $session->id]);
 
-        if (!$chat) {
+        if (! $chat) {
             // Create new chat
             $chat = Chat::create([
                 'visitor_id' => $session->visitor_id,
@@ -396,7 +397,7 @@ class DashboardController extends Controller
         $user = Auth::user();
 
         // Verify agent has access
-        if (!$user->clients()->where('clients.id', $chat->client_id)->exists()) {
+        if (! $user->clients()->where('clients.id', $chat->client_id)->exists()) {
             abort(403);
         }
 
@@ -408,7 +409,7 @@ class DashboardController extends Controller
 
         if ($unreadMessages->count() > 0) {
             $messageIds = $unreadMessages->pluck('id')->toArray();
-            
+
             \App\Models\Message::whereIn('id', $messageIds)->update([
                 'is_read' => true,
                 'read_at' => now(),
@@ -432,7 +433,7 @@ class DashboardController extends Controller
         $session = VisitorSession::with(['visitor', 'client'])->findOrFail($request->session_id);
 
         // Verify agent has access to this client
-        if (!$user->clients()->where('clients.id', $session->client_id)->exists()) {
+        if (! $user->clients()->where('clients.id', $session->client_id)->exists()) {
             abort(403, 'You are not assigned to this client.');
         }
 
@@ -466,12 +467,14 @@ class DashboardController extends Controller
     public function markVisitorOffline(VisitorSession $session)
     {
         $user = Auth::user();
-        if (!$user->clients()->where('clients.id', $session->client_id)->exists()) {
+        if (! $user->clients()->where('clients.id', $session->client_id)->exists()) {
             abort(403);
         }
-        
+
         $session->update(['is_online' => false]);
-        
+
+        event(new \App\Events\VisitorOnlineStatusChanged($session, false));
+
         return back()->with('success', 'Visitor marked as offline.');
     }
 }
