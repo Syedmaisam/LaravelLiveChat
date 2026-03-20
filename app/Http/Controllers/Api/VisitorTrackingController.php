@@ -76,26 +76,44 @@ class VisitorTrackingController extends Controller
             ]);
         }
 
-        // Get or create session
+        // Get or create session — reuse recent session if visitor returns quickly
         $session = VisitorSession::where('visitor_id', $visitor->id)
             ->where('is_online', true)
             ->latest()
             ->first();
 
         if (! $session) {
-            $session = VisitorSession::create([
-                'visitor_id' => $visitor->id,
-                'client_id' => $client->id,
-                'session_key' => Str::uuid(),
-                'referrer_url' => $request->referrer_url,
-                'landing_page' => $request->page_url,
-                'current_page' => $request->page_url,
-                'is_online' => true,
-                'started_at' => now(),
-                'last_activity_at' => now(),
-            ]);
+            // Check for a recent offline session (within 10 minutes) to reuse
+            // This keeps the same session ID so the agent dashboard stays subscribed
+            $recentSession = VisitorSession::where('visitor_id', $visitor->id)
+                ->where('client_id', $client->id)
+                ->where('is_online', false)
+                ->where('last_activity_at', '>', now()->subMinutes(10))
+                ->latest()
+                ->first();
 
-            event(new VisitorOnlineStatusChanged($session, true));
+            if ($recentSession) {
+                $recentSession->update([
+                    'is_online' => true,
+                    'current_page' => $request->page_url,
+                    'last_activity_at' => now(),
+                ]);
+                $session = $recentSession;
+                event(new VisitorOnlineStatusChanged($session, true));
+            } else {
+                $session = VisitorSession::create([
+                    'visitor_id' => $visitor->id,
+                    'client_id' => $client->id,
+                    'session_key' => Str::uuid(),
+                    'referrer_url' => $request->referrer_url,
+                    'landing_page' => $request->page_url,
+                    'current_page' => $request->page_url,
+                    'is_online' => true,
+                    'started_at' => now(),
+                    'last_activity_at' => now(),
+                ]);
+                event(new VisitorOnlineStatusChanged($session, true));
+            }
         } else {
             $session->update([
                 'current_page' => $request->page_url,

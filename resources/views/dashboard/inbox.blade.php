@@ -235,7 +235,7 @@
                     @endphp
                     @if($visitorChat)
                         {{-- Visitor has a chat - link to it --}}
-                        <a href="{{ route('inbox.chat', $visitorChat) }}" id="chat-item-{{ $visitorChat->id }}" data-visitor-id="{{ $session->visitor_id }}"
+                        <a href="{{ route('inbox.chat', $visitorChat) }}" id="chat-item-{{ $visitorChat->id }}" data-visitor-id="{{ $session->visitor_id }}" data-session-id="{{ $session->id }}"
                            class="block p-4 border-b border-[#222] hover:bg-[#1a1a1a] {{ $isCurrentChat ? 'bg-[#1a1a1a]' : '' }}">
                             <div class="flex items-start gap-3">
                                 <div class="w-10 h-10 bg-[#fe9e00]/20 rounded-full flex items-center justify-center shrink-0">
@@ -253,7 +253,7 @@
                         </a>
                     @else
                         {{-- Visitor online but no chat yet - clickable to initiate chat --}}
-                        <div onclick="initiateChat({{ $session->id }})" id="session-item-{{ $session->id }}" data-visitor-id="{{ $session->visitor_id }}"
+                        <div onclick="initiateChat({{ $session->id }})" id="session-item-{{ $session->id }}" data-visitor-id="{{ $session->visitor_id }}" data-session-id="{{ $session->id }}"
                            class="cursor-pointer block p-4 border-b border-[#222] hover:bg-[#1a1a1a]">
                             <div class="flex items-start gap-3">
                                 <div class="w-10 h-10 bg-[#fe9e00]/20 rounded-full flex items-center justify-center shrink-0">
@@ -281,6 +281,7 @@
             <div id="list-all" class="flex-1 overflow-y-auto hidden">
                 @forelse($recentChats as $recentChat)
                 <a href="{{ route('inbox.chat', $recentChat) }}" id="chat-item-{{ $recentChat->id }}"
+                   data-session-id="{{ $recentChat->visitor_session_id }}"
                    class="block p-4 border-b border-[#222] hover:bg-[#1a1a1a] {{ isset($chat) && $recentChat->id === $chat->id ? 'bg-[#1a1a1a]' : '' }}">
                     <div class="flex items-start gap-3">
                         <div class="w-10 h-10 bg-[#fe9e00]/20 rounded-full flex items-center justify-center shrink-0">
@@ -294,9 +295,7 @@
                                         <span class="text-[9px] bg-red-500/10 text-red-500 border border-red-500/20 px-1.5 py-0.5 rounded uppercase font-bold tracking-wider">Closed</span>
                                     @endif
                                 </h4>
-                                @if($recentChat->visitorSession?->is_online && $recentChat->status !== 'closed')
-                                <span class="w-2 h-2 bg-green-500 rounded-full shrink-0"></span>
-                                @endif
+                                <span class="online-dot w-2 h-2 bg-green-500 rounded-full shrink-0 {{ ($recentChat->visitorSession?->is_online && $recentChat->status !== 'closed') ? '' : 'hidden' }}"></span>
                             </div>
                             <p class="text-xs text-gray-500 truncate">{{ $recentChat->client->name }}</p>
                             <p class="text-sm text-gray-400 truncate mt-1">
@@ -840,16 +839,56 @@
         monitoringChannel.bind('status.changed', function(data) {
              console.log('Status changed:', data);
              if (!data.is_online) {
-                 // Remove from Active Visitors list
-                 const items = document.querySelectorAll(`#list-active [data-visitor-id="${data.visitor_id}"]`);
+                 // Fade out from Active Visitors list (hide, don't remove — visitor may return)
+                 const items = document.querySelectorAll(`#list-active [data-session-id="${data.session_id}"], #list-active [data-visitor-id="${data.visitor_id}"]`);
                  items.forEach(item => {
-                     item.style.transition = 'opacity 0.5s, height 0.5s';
+                     item.style.transition = 'opacity 0.5s';
                      item.style.opacity = '0';
-                     setTimeout(() => item.remove(), 500);
+                     setTimeout(() => { item.style.display = 'none'; }, 500);
                  });
-                 // Update green dots in All Chats list (remove online indicator)
-                 const allItems = document.querySelectorAll('#list-all .bg-green-500.rounded-full');
-                 // We can't easily match by visitor_id in All Chats, so this is best-effort
+                 // Hide green dots in All Chats sidebar
+                 document.querySelectorAll(`[data-session-id="${data.session_id}"] .online-dot`).forEach(dot => {
+                     dot.classList.add('hidden');
+                 });
+                 // Update header if viewing this visitor's chat
+                 @if(isset($chat) && $chat && $chat->visitorSession)
+                 if (data.session_id == {{ $chat->visitorSession->id }}) {
+                     const statusEl = document.getElementById('visitor-status');
+                     if (statusEl) {
+                         const clientName = '{{ $chat->client->name }}';
+                         statusEl.innerHTML = clientName + ' • <span>Last seen just now</span>';
+                     }
+                     const headerDot = document.getElementById('current-page-indicator');
+                     if (headerDot) headerDot.classList.add('hidden');
+                 }
+                 @endif
+             } else {
+                 // Visitor came back online — restore in Active Visitors list
+                 let restored = false;
+                 const hiddenItems = document.querySelectorAll(`#list-active [data-session-id="${data.session_id}"], #list-active [data-visitor-id="${data.visitor_id}"]`);
+                 hiddenItems.forEach(item => {
+                     item.style.display = '';
+                     item.style.opacity = '1';
+                     restored = true;
+                 });
+
+                 // Restore green dots in All Chats sidebar
+                 document.querySelectorAll(`[data-session-id="${data.session_id}"] .online-dot`).forEach(dot => {
+                     dot.classList.remove('hidden');
+                 });
+
+                 // Update header if viewing this visitor's chat
+                 @if(isset($chat) && $chat && $chat->visitorSession)
+                 if (data.session_id == {{ $chat->visitorSession->id }}) {
+                     const statusEl = document.getElementById('visitor-status');
+                     if (statusEl) {
+                         const clientName = '{{ $chat->client->name }}';
+                         statusEl.innerHTML = clientName + ' • <span class="text-green-400">Online</span>';
+                     }
+                     const headerDot = document.getElementById('current-page-indicator');
+                     if (headerDot) headerDot.classList.remove('hidden');
+                 }
+                 @endif
              }
          });
 
@@ -874,6 +913,17 @@
                     // Update tab title with unread count
                     window.unreadCount = (window.unreadCount || 0) + 1;
                     document.title = `(${window.unreadCount}) Live Chat`;
+                }
+
+                // Visitor sent a message — they're definitely online, update status
+                if (data.sender_type === 'visitor') {
+                    const statusEl = document.getElementById('visitor-status');
+                    if (statusEl && !statusEl.innerHTML.includes('Online')) {
+                        const clientName = '{{ $chat->client->name ?? "" }}';
+                        statusEl.innerHTML = clientName + ' • <span class="text-green-400">Online</span>';
+                    }
+                    const headerDot = document.getElementById('current-page-indicator');
+                    if (headerDot) headerDot.classList.remove('hidden');
                 }
             }
         });
@@ -952,33 +1002,35 @@
                 if (nameEl && !nameEl.querySelector('.closed-badge')) {
                     nameEl.insertAdjacentHTML('afterbegin', '<span class="closed-badge text-[9px] bg-red-500/10 text-red-500 border border-red-500/20 px-1.5 py-0.5 rounded uppercase font-bold tracking-wider mr-2">Closed</span>');
                 }
-                // Remove green dot
-                const dot = sidebarItem.querySelector('.bg-green-500.rounded-full');
-                if (dot) dot.remove();
+                // Hide green dot
+                const dot = sidebarItem.querySelector('.online-dot');
+                if (dot) dot.classList.add('hidden');
             }
         });
 
-        // Subscribe to visitor session status changes
-        @if($chat->visitorSession)
-        const sessionChannel = pusher.subscribe('visitor-session.{{ $chat->visitorSession->id }}');
-        sessionChannel.bind('status.changed', function(data) {
-            // Update online/offline indicator in header
-            const statusEl = document.getElementById('visitor-status');
-            if (statusEl) {
-                const clientName = '{{ $chat->client->name }}';
-                if (data.is_online) {
-                    statusEl.innerHTML = clientName + ' • <span class="text-green-400">Online</span>';
-                } else {
-                    statusEl.innerHTML = clientName + ' • <span>Last seen just now</span>';
-                }
-            }
-        });
-        @endif
-
-        // Subscribe to visitor session for page changes
+        // Subscribe to visitor session for status + page changes
         if (sessionId) {
-            const sessionChannel = pusher.subscribe('visitor-session.' + sessionId);
-            sessionChannel.bind('page.changed', function(data) {
+            const visitorSessionChannel = pusher.subscribe('visitor-session.' + sessionId);
+
+            // Online/offline status in header
+            visitorSessionChannel.bind('status.changed', function(data) {
+                const statusEl = document.getElementById('visitor-status');
+                if (statusEl) {
+                    const clientName = '{{ $chat->client->name ?? "" }}';
+                    if (data.is_online) {
+                        statusEl.innerHTML = clientName + ' • <span class="text-green-400">Online</span>';
+                    } else {
+                        statusEl.innerHTML = clientName + ' • <span>Last seen just now</span>';
+                    }
+                }
+                const headerDot = document.getElementById('current-page-indicator');
+                if (headerDot) {
+                    data.is_online ? headerDot.classList.remove('hidden') : headerDot.classList.add('hidden');
+                }
+            });
+
+            // Page navigation tracking
+            visitorSessionChannel.bind('page.changed', function(data) {
                 updateCurrentPage(data.page_url, data.page_title);
             });
         }
