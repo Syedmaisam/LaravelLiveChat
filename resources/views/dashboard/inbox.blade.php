@@ -654,7 +654,7 @@
         const monitoringChannel = pusher.subscribe('monitoring');
         monitoringChannel.bind('visitor.joined', function(data) {
              console.log('New visitor joined:', data);
-             playNotificationSound();
+             startRinging('visitor-' + (data.session ? data.session.id : Date.now()));
 
              // In-app slider notification
              const visitorName = data.visitor?.name || 'Anonymous';
@@ -782,24 +782,27 @@
                          newItem.classList.remove('bg-[#fe9e00]/20');
                      }, 2000);
                      
-                     // Start ringing for waiting chats
-                     if (data.chat.status === 'waiting') {
-                         newItem.setAttribute('data-ringing-chat', data.chat.id);
-                         startRinging(data.chat.id);
-                         showToast({
-                             title: 'New Chat Waiting',
-                             body: `${data.visitor.name || 'Anonymous'} is waiting for an agent`,
-                             icon: (data.visitor.name || 'A').substring(0,2).toUpperCase(),
-                             onClick: function() { window.location.href = chatUrl; },
-                             duration: 10000,
-                         });
-                     } else {
+                     if (data.chat.status !== 'waiting') {
                          playNotificationSound();
                      }
                  } else {
                     // Update existing item info
                     const nameEl = existingItem.querySelector('h4');
                     if (nameEl) nameEl.textContent = data.visitor.name || 'Anonymous';
+                 }
+
+                 // Always start ringing for waiting chats (new or existing)
+                 if (data.chat.status === 'waiting') {
+                     const chatItem = document.getElementById(itemId);
+                     if (chatItem) chatItem.setAttribute('data-ringing-chat', data.chat.id);
+                     startRinging(data.chat.id);
+                     showToast({
+                         title: 'New Chat Waiting',
+                         body: `${data.visitor.name || 'Anonymous'} is waiting for an agent`,
+                         icon: (data.visitor.name || 'A').substring(0,2).toUpperCase(),
+                         onClick: function() { window.location.href = chatUrl; },
+                         duration: 10000,
+                     });
                  }
 
                  // Also add/update in All Chats tab
@@ -1177,59 +1180,23 @@
         }
 
         // Ringing system for new waiting chats
-        let ringingSource = null;
-        let ringingCtx = null;
+        // Preload ringtone audio file — loop natively via Audio element
+        const ringtoneAudio = new Audio('/ringtone.wav');
+        ringtoneAudio.loop = true;
+        ringtoneAudio.preload = 'auto';
+        ringtoneAudio.addEventListener('error', e => console.error('Ringtone load error:', e));
+        ringtoneAudio.addEventListener('ended', () => console.log('Ringtone ended event (should not happen with loop=true)'));
         let ringingChats = new Set();
 
         function startRinging(chatId) {
+            console.log('startRinging called for:', chatId, 'paused:', ringtoneAudio.paused, 'loop:', ringtoneAudio.loop);
             ringingChats.add(chatId);
             updateRingingBanner();
-            if (ringingSource) return; // Already ringing
-
-            try {
-                const ctx = new (window.AudioContext || window.webkitAudioContext)();
-                if (ctx.state === 'suspended') ctx.resume();
-
-                const sampleRate = ctx.sampleRate;
-                const duration = 3; // 3-second loop
-                const length = sampleRate * duration;
-                const buffer = ctx.createBuffer(1, length, sampleRate);
-                const samples = buffer.getChannelData(0);
-
-                // Ring pattern: burst, burst, silence
-                const bursts = [
-                    { start: 0.0, end: 0.35 },
-                    { start: 0.5, end: 0.85 },
-                ];
-
-                for (let i = 0; i < length; i++) {
-                    const t = i / sampleRate;
-                    samples[i] = 0;
-                    for (const b of bursts) {
-                        if (t >= b.start && t <= b.end) {
-                            let env = 1;
-                            if (t - b.start < 0.02) env = (t - b.start) / 0.02;
-                            if (b.end - t < 0.02) env = (b.end - t) / 0.02;
-                            samples[i] = env * 0.14 * (
-                                Math.sin(2 * Math.PI * 440 * t) +
-                                Math.sin(2 * Math.PI * 480 * t)
-                            );
-                            break;
-                        }
-                    }
-                }
-
-                const source = ctx.createBufferSource();
-                source.buffer = buffer;
-                source.loop = true;
-                source.connect(ctx.destination);
-                source.start(0);
-
-                ringingCtx = ctx;
-                ringingSource = source;
-            } catch (e) {
-                console.log('Could not start ringtone:', e);
-            }
+            if (!ringtoneAudio.paused) return; // Already playing
+            ringtoneAudio.currentTime = 0;
+            ringtoneAudio.play().then(() => {
+                console.log('Ringtone playing, loop:', ringtoneAudio.loop, 'duration:', ringtoneAudio.duration);
+            }).catch(e => console.log('Ringtone autoplay blocked:', e));
         }
 
         function stopRinging(chatId) {
@@ -1238,15 +1205,9 @@
             } else {
                 ringingChats.clear();
             }
-            if (ringingChats.size === 0 && ringingSource) {
-                try {
-                    ringingSource.stop();
-                } catch (e) {}
-                ringingSource = null;
-                if (ringingCtx) {
-                    ringingCtx.close().catch(() => {});
-                    ringingCtx = null;
-                }
+            if (ringingChats.size === 0) {
+                ringtoneAudio.pause();
+                ringtoneAudio.currentTime = 0;
             }
             updateRingingBanner();
         }
