@@ -118,7 +118,7 @@
 
     <!-- Ringing Banner for new waiting chats -->
     <div id="ringing-banner" class="hidden bg-green-500/20 border-b border-green-500/40 px-4 py-3 text-center shrink-0 cursor-pointer hover:bg-green-500/30 transition-colors"
-         onclick="document.querySelector('[data-ringing-chat]')?.click(); stopRinging();">
+         onclick="const el = document.querySelector('[data-ringing-chat]'); if (el) el.click();">
         <div class="flex items-center justify-center gap-3">
             <span class="relative flex h-3 w-3">
                 <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
@@ -729,7 +729,6 @@
 
             // Function to initiate chat via POST
             window.initiateChat = function(sessionId) {
-                stopRinging(); // Stop all ringing when navigating to a chat
                 const form = document.createElement('form');
                 form.method = 'POST';
                 form.action = '/inbox/session/' + sessionId;
@@ -1178,52 +1177,58 @@
         }
 
         // Ringing system for new waiting chats
-        let ringingInterval = null;
+        let ringingSource = null;
+        let ringingCtx = null;
         let ringingChats = new Set();
-
-        function playRingTone() {
-            try {
-                const ctx = initAudioContext();
-                if (ctx.state === 'suspended') ctx.resume();
-
-                // Two-tone ring pattern (like a phone)
-                const now = ctx.currentTime;
-                for (let i = 0; i < 2; i++) {
-                    const osc = ctx.createOscillator();
-                    const gain = ctx.createGain();
-                    osc.connect(gain);
-                    gain.connect(ctx.destination);
-                    osc.frequency.value = i === 0 ? 440 : 520;
-                    osc.type = 'sine';
-                    gain.gain.setValueAtTime(0, now);
-                    // Ring on
-                    gain.gain.linearRampToValueAtTime(0.15, now + 0.02);
-                    gain.gain.setValueAtTime(0.15, now + 0.4);
-                    gain.gain.linearRampToValueAtTime(0, now + 0.42);
-                    // Ring on again
-                    gain.gain.linearRampToValueAtTime(0.15, now + 0.6);
-                    gain.gain.setValueAtTime(0.15, now + 1.0);
-                    gain.gain.linearRampToValueAtTime(0, now + 1.02);
-                    osc.start(now);
-                    osc.stop(now + 1.1);
-                }
-            } catch (e) {
-                console.log('Could not play ring tone:', e);
-            }
-        }
 
         function startRinging(chatId) {
             ringingChats.add(chatId);
             updateRingingBanner();
-            if (!ringingInterval) {
-                playRingTone();
-                ringingInterval = setInterval(() => {
-                    if (ringingChats.size > 0) {
-                        playRingTone();
-                    } else {
-                        stopRinging();
+            if (ringingSource) return; // Already ringing
+
+            try {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                if (ctx.state === 'suspended') ctx.resume();
+
+                const sampleRate = ctx.sampleRate;
+                const duration = 3; // 3-second loop
+                const length = sampleRate * duration;
+                const buffer = ctx.createBuffer(1, length, sampleRate);
+                const samples = buffer.getChannelData(0);
+
+                // Ring pattern: burst, burst, silence
+                const bursts = [
+                    { start: 0.0, end: 0.35 },
+                    { start: 0.5, end: 0.85 },
+                ];
+
+                for (let i = 0; i < length; i++) {
+                    const t = i / sampleRate;
+                    samples[i] = 0;
+                    for (const b of bursts) {
+                        if (t >= b.start && t <= b.end) {
+                            let env = 1;
+                            if (t - b.start < 0.02) env = (t - b.start) / 0.02;
+                            if (b.end - t < 0.02) env = (b.end - t) / 0.02;
+                            samples[i] = env * 0.14 * (
+                                Math.sin(2 * Math.PI * 440 * t) +
+                                Math.sin(2 * Math.PI * 480 * t)
+                            );
+                            break;
+                        }
                     }
-                }, 3000);
+                }
+
+                const source = ctx.createBufferSource();
+                source.buffer = buffer;
+                source.loop = true;
+                source.connect(ctx.destination);
+                source.start(0);
+
+                ringingCtx = ctx;
+                ringingSource = source;
+            } catch (e) {
+                console.log('Could not start ringtone:', e);
             }
         }
 
@@ -1233,9 +1238,15 @@
             } else {
                 ringingChats.clear();
             }
-            if (ringingChats.size === 0 && ringingInterval) {
-                clearInterval(ringingInterval);
-                ringingInterval = null;
+            if (ringingChats.size === 0 && ringingSource) {
+                try {
+                    ringingSource.stop();
+                } catch (e) {}
+                ringingSource = null;
+                if (ringingCtx) {
+                    ringingCtx.close().catch(() => {});
+                    ringingCtx = null;
+                }
             }
             updateRingingBanner();
         }
