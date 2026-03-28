@@ -358,6 +358,7 @@
         </main>
     </div>
     <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    @include('partials.notification-ringtone')
     @stack('scripts')
 </body>
 </html>

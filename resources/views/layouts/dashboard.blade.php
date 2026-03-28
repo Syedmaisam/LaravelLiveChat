@@ -266,6 +266,7 @@
             }
         }, 300);
     </script>
+    @include('partials.notification-ringtone')
     @stack('scripts')
 </body>
 </html>

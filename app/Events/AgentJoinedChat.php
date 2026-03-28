@@ -6,11 +6,11 @@ use App\Models\Chat;
 use App\Models\User;
 use Illuminate\Broadcasting\Channel;
 use Illuminate\Broadcasting\InteractsWithSockets;
-use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
+use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 
-class AgentJoinedChat implements ShouldBroadcast
+class AgentJoinedChat implements ShouldBroadcastNow
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
@@ -36,6 +36,7 @@ class AgentJoinedChat implements ShouldBroadcast
     {
         return [
             'chat_id' => $this->chat->id,
+            'chat_uuid' => $this->chat->uuid,
             'session_id' => $this->chat->visitor_session_id,
             'agent' => [
                 'id' => $this->agent->id,

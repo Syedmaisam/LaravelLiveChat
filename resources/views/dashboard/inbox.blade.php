@@ -599,104 +599,70 @@
     </div>
 
     <script>
-        // Initialize Pusher/Reverb
-        const pusher = new Pusher('{{ config('reverb.apps.apps.0.key') }}', {
-            wsHost: '{{ config('broadcasting.connections.reverb.options.host', '127.0.0.1') }}',
-            wsPort: {{ config('broadcasting.connections.reverb.options.port', 8080) }},
-            wssPort: {{ config('broadcasting.connections.reverb.options.port', 8080) }},
-            forceTLS: false,
-            enabledTransports: ['ws', 'wss'],
-            disableStats: true,
-            cluster: 'mt1',
-            authEndpoint: '/broadcasting/auth',
-            auth: {
-                headers: {
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
-                }
-            }
-        });
-
-        // Handle connection state changes
-        let wasDisconnected = false;
-        pusher.connection.bind('state_change', function(states) {
-            const banner = document.getElementById('connection-banner');
-            if (states.current === 'connected') {
-                banner.classList.add('hidden');
-                if (wasDisconnected) {
-                    window.location.reload();
-                }
-            } else if (states.current === 'disconnected' || states.current === 'unavailable') {
-                banner.classList.remove('hidden');
-                wasDisconnected = true;
-            }
-        });
-
-        // Subscribe to agent private channel for notifications
+        // Current authenticated user ID — used in isMe check for message.sent handler
         const userId = {{ Auth::id() }};
-        console.log('Subscribing to private-agent.' + userId);
-        const agentChannel = pusher.subscribe('private-agent.' + userId);
-        agentChannel.bind('agent.notification', function(data) {
-            console.log('Agent notification received:', data);
-            // Only show notification if not already on this chat page
-            if (!data.url || !window.location.href.includes(data.url)) {
-                if ('Notification' in window && Notification.permission === 'granted') {
-                    new Notification(data.title, { body: data.body });
-                }
-            }
-        });
 
-        // Request notification permission if default
-        if ('Notification' in window && Notification.permission === 'default') {
-            Notification.requestPermission();
+        // Reuse the shared Pusher connection from notification-ringtone partial
+        // The partial is included at the bottom of this page — poll until it is ready
+        function vtWaitForPusher(callback) {
+            if (window.vtPusher && window.vtMonitoringChannel) {
+                callback(window.vtPusher, window.vtMonitoringChannel);
+                return;
+            }
+            const interval = setInterval(function() {
+                if (window.vtPusher && window.vtMonitoringChannel) {
+                    clearInterval(interval);
+                    callback(window.vtPusher, window.vtMonitoringChannel);
+                }
+            }, 50);
         }
 
-        // Subscribe to monitoring channel for new visitors (Unified with Admin Dashboard)
-        const monitoringChannel = pusher.subscribe('monitoring');
-        monitoringChannel.bind('visitor.joined', function(data) {
-             console.log('New visitor joined:', data);
-             startRinging('visitor-' + (data.session ? data.session.id : Date.now()));
+        vtWaitForPusher(function(pusher, monitoringChannel) {
+            // Connection state banner
+            let wasDisconnected = false;
+            pusher.connection.bind('state_change', function(states) {
+                const banner = document.getElementById('connection-banner');
+                if (states.current === 'connected') {
+                    banner.classList.add('hidden');
+                    if (wasDisconnected) {
+                        window.location.reload();
+                    }
+                } else if (states.current === 'disconnected' || states.current === 'unavailable') {
+                    banner.classList.remove('hidden');
+                    wasDisconnected = true;
+                }
+            });
 
-             // In-app slider notification
-             const visitorName = data.visitor?.name || 'Anonymous';
-             const country = data.visitor?.location?.country || 'Unknown';
-             const sessionId = data.session?.id;
-             showToast({
-                 title: 'New Visitor',
-                 body: `${visitorName} from ${country}`,
-                 icon: (visitorName).substring(0,2).toUpperCase(),
-                 onClick: sessionId ? function() { initiateChat(sessionId); } : null,
-             });
+            // Private channel for per-agent notifications
+            const agentChannel = pusher.subscribe('private-agent.' + userId);
+            agentChannel.bind('agent.notification', function(data) {
+                if (!data.url || !window.location.href.includes(data.url)) {
+                    if ('Notification' in window && Notification.permission === 'granted') {
+                        new Notification(data.title, { body: data.body });
+                    }
+                }
+            });
 
-             if ('Notification' in window && Notification.permission === 'granted') {
-                 const notification = new Notification('New Visitor 🔔', {
-                     body: `New visitor from ${data.visitor.location.country || 'Unknown'}`,
-                     icon: '/favicon.ico',
-                     tag: 'new-visitor-' + (data.session ? data.session.id : Date.now())
-                 });
-                 notification.onclick = function() {
-                     window.focus();
-                     window.location.href = '{{ route("admin.visitors.index") }}?session=' + (data.session ? data.session.id : '');
-                 };
-             }
+            if ('Notification' in window && Notification.permission === 'default') {
+                Notification.requestPermission();
+            }
 
-             // Add to Active Visitors list (Status Item)
-             if (data.session && data.session.id) {
-                 const list = document.getElementById('list-active');
-                 const sessionId = data.session.id;
-                 const itemId = 'session-item-' + sessionId;
-                 
-                 // Remove "No active visitors" message if exists
-                 const emptyMsg = list.querySelector('.text-center');
-                 if (emptyMsg && emptyMsg.innerText.includes('No active visitors')) emptyMsg.remove();
-                 
-                     // Check if visitor already exists in list (deduplicate)
-                     if (list.querySelector(`[data-visitor-id="${data.visitor.id}"]`)) {
-                         return; 
-                     }
+            // visitor.joined — sidebar DOM only (ring + toast handled by partial)
+            monitoringChannel.bind('visitor.joined', function(data) {
+                if (data.session && data.session.id) {
+                    const list = document.getElementById('list-active');
+                    if (!list) return;
+                    const sessionId = data.session.id;
+                    const itemId = 'session-item-' + sessionId;
 
-                     if (!document.getElementById(itemId)) {
-                         const div = document.createElement('div');
-                         div.innerHTML = `
+                    const emptyMsg = list.querySelector('.text-center');
+                    if (emptyMsg && emptyMsg.innerText.includes('No active visitors')) emptyMsg.remove();
+
+                    if (list.querySelector(`[data-visitor-id="${data.visitor.id}"]`)) return;
+
+                    if (!document.getElementById(itemId)) {
+                        const div = document.createElement('div');
+                        div.innerHTML = `
                             <div onclick="initiateChat(${sessionId})" id="${itemId}" data-visitor-id="${data.visitor.id}" class="cursor-pointer block p-4 border-b border-[#222] hover:bg-[#1a1a1a] transition-colors duration-1000 ease-out bg-green-500/10">
                                 <div class="flex items-start gap-3">
                                     <div class="w-10 h-10 bg-[#fe9e00]/20 rounded-full flex items-center justify-center shrink-0">
@@ -707,198 +673,160 @@
                                             <h4 class="font-medium truncate">${data.visitor.name || 'Anonymous'}</h4>
                                             <span class="w-2 h-2 bg-green-500 rounded-full shrink-0"></span>
                                         </div>
-                                        <p class="text-xs text-gray-500 truncate">${data.visitor.location.country || 'Unknown Location'}</p>
+                                        <p class="text-xs text-gray-500 truncate">${data.visitor.location?.country || 'Unknown Location'}</p>
                                         <p class="text-xs text-gray-400 truncate mt-1">Click to start chat</p>
                                     </div>
                                 </div>
                             </div>
-                         `;
-                         const newItem = div.firstElementChild;
-                         list.insertBefore(newItem, list.firstChild);
-                         setTimeout(() => newItem.classList.remove('bg-green-500/10'), 2000);
-                     }
-                 }
-            });
-
-            // Stop ringing when agent joins a chat (broadcast from AgentJoinedChat event)
-            monitoringChannel.bind('agent.joined', function(data) {
-                if (data.chat_id) {
-                    stopRinging(data.chat_id);
+                        `;
+                        const newItem = div.firstElementChild;
+                        list.insertBefore(newItem, list.firstChild);
+                        setTimeout(() => newItem.classList.remove('bg-green-500/10'), 2000);
+                        if (typeof switchTab === 'function') switchTab('active');
+                    }
                 }
             });
 
-            // Function to initiate chat via POST
-            window.initiateChat = function(sessionId) {
-                const form = document.createElement('form');
-                form.method = 'POST';
-                form.action = '/inbox/session/' + sessionId;
-                
-                const csrfInput = document.createElement('input');
-                csrfInput.type = 'hidden';
-                csrfInput.name = '_token';
-                csrfInput.value = document.querySelector('meta[name="csrf-token"]').content;
-                form.appendChild(csrfInput);
-                
-                document.body.appendChild(form);
-                form.submit();
-            };
+            // agent.joined — ring/toast handled by partial; no duplicate logic needed here
 
+            // visitor.updated — sidebar DOM only (ring + toast handled by partial)
+            monitoringChannel.bind('visitor.updated', function(data) {
+                if (data.chat && (data.chat.status === 'active' || data.chat.status === 'waiting')) {
+                    const list = document.getElementById('list-active');
+                    const chatUrl = '/inbox/' + (data.chat.uuid || data.chat.id);
+                    const itemId = 'chat-item-' + data.chat.id;
 
-        monitoringChannel.bind('visitor.updated', function(data) {
-             console.log('Visitor updated:', data);
-             if (data.chat && (data.chat.status === 'active' || data.chat.status === 'waiting')) {
-                 const list = document.getElementById('list-active');
-                 const chatUrl = '/dashboard/inbox/' + data.chat.id;
-                 const itemId = 'chat-item-' + data.chat.id;
-                 
-                 // Check if exists
-                 let existingItem = document.getElementById(itemId);
-                 
-                 if (!existingItem) {
-                     // Create new item
-                     const div = document.createElement('div');
-                     div.innerHTML = `
-                        <a href="${chatUrl}" id="${itemId}" class="block p-4 border-b border-[#222] hover:bg-[#1a1a1a] transition-colors duration-1000 ease-out bg-[#fe9e00]/20">
-                            <div class="flex items-start gap-3">
-                                <div class="w-10 h-10 bg-[#fe9e00]/20 rounded-full flex items-center justify-center shrink-0">
-                                    <span class="text-[#fe9e00] font-semibold text-sm">${(data.visitor.name || 'A').substring(0,2).toUpperCase()}</span>
-                                </div>
-                                <div class="flex-1 min-w-0">
-                                    <div class="flex items-center justify-between">
-                                        <h4 class="font-medium truncate">${data.visitor.name || 'Anonymous'}</h4>
-                                        <span class="w-2 h-2 bg-green-500 rounded-full shrink-0"></span>
+                    let existingItem = document.getElementById(itemId);
+
+                    if (!existingItem) {
+                        const div = document.createElement('div');
+                        div.innerHTML = `
+                            <a href="${chatUrl}" id="active-${itemId}" class="block p-4 border-b border-[#222] hover:bg-[#1a1a1a] transition-colors duration-1000 ease-out bg-[#fe9e00]/20">
+                                <div class="flex items-start gap-3">
+                                    <div class="w-10 h-10 bg-[#fe9e00]/20 rounded-full flex items-center justify-center shrink-0">
+                                        <span class="text-[#fe9e00] font-semibold text-sm">${(data.visitor.name || 'A').substring(0,2).toUpperCase()}</span>
                                     </div>
-                                    <p class="text-xs text-gray-500 truncate">${data.chat.client_name || 'Client'}</p>
-                                    <p class="text-sm text-gray-400 truncate mt-1">Active now</p>
-                                </div>
-                            </div>
-                        </a>
-                     `;
-                     const newItem = div.firstElementChild;
-                     list.insertBefore(newItem, list.firstChild);
-                     
-                     // Remove highlight after 2s
-                     setTimeout(() => {
-                         newItem.classList.remove('bg-[#fe9e00]/20');
-                     }, 2000);
-                     
-                     if (data.chat.status !== 'waiting') {
-                         playNotificationSound();
-                     }
-                 } else {
-                    // Update existing item info
-                    const nameEl = existingItem.querySelector('h4');
-                    if (nameEl) nameEl.textContent = data.visitor.name || 'Anonymous';
-                 }
-
-                 // Always start ringing for waiting chats (new or existing)
-                 if (data.chat.status === 'waiting') {
-                     const chatItem = document.getElementById(itemId);
-                     if (chatItem) chatItem.setAttribute('data-ringing-chat', data.chat.id);
-                     startRinging(data.chat.id);
-                     showToast({
-                         title: 'New Chat Waiting',
-                         body: `${data.visitor.name || 'Anonymous'} is waiting for an agent`,
-                         icon: (data.visitor.name || 'A').substring(0,2).toUpperCase(),
-                         onClick: function() { window.location.href = chatUrl; },
-                         duration: 10000,
-                     });
-                 }
-
-                 // Also add/update in All Chats tab
-                 const allList = document.getElementById('list-all');
-                 const allItemId = 'chat-item-' + data.chat.id;
-                 let allExisting = document.getElementById(allItemId);
-                 // Only add if not already in the list (it may already exist from page load)
-                 if (!allExisting && allList) {
-                     const allEmpty = allList.querySelector('.text-center');
-                     if (allEmpty && allEmpty.innerText.includes('No chats')) allEmpty.remove();
-                     const div = document.createElement('div');
-                     div.innerHTML = `
-                        <a href="${chatUrl}" id="${allItemId}" class="block p-4 border-b border-[#222] hover:bg-[#1a1a1a] transition-colors duration-1000 ease-out bg-[#fe9e00]/20">
-                            <div class="flex items-start gap-3">
-                                <div class="w-10 h-10 bg-[#fe9e00]/20 rounded-full flex items-center justify-center shrink-0">
-                                    <span class="text-[#fe9e00] font-semibold text-sm">${(data.visitor.name || 'A').substring(0,2).toUpperCase()}</span>
-                                </div>
-                                <div class="flex-1 min-w-0">
-                                    <div class="flex items-center justify-between">
-                                        <h4 class="font-medium truncate">${data.visitor.name || 'Anonymous'}</h4>
-                                        <span class="w-2 h-2 bg-green-500 rounded-full shrink-0"></span>
+                                    <div class="flex-1 min-w-0">
+                                        <div class="flex items-center justify-between">
+                                            <h4 class="font-medium truncate">${data.visitor.name || 'Anonymous'}</h4>
+                                            <span class="w-2 h-2 bg-green-500 rounded-full shrink-0"></span>
+                                        </div>
+                                        <p class="text-xs text-gray-500 truncate">${data.chat.client_name || 'Client'}</p>
+                                        <p class="text-sm text-gray-400 truncate mt-1">Active now</p>
                                     </div>
-                                    <p class="text-xs text-gray-500 truncate">${data.chat.client_name || 'Client'}</p>
-                                    <p class="text-sm text-gray-400 truncate mt-1">Just now</p>
                                 </div>
-                            </div>
-                        </a>
-                     `;
-                     const newAllItem = div.firstElementChild;
-                     allList.insertBefore(newAllItem, allList.firstChild);
-                     setTimeout(() => newAllItem.classList.remove('bg-[#fe9e00]/20'), 2000);
-                 }
-             }
-        });
+                            </a>
+                        `;
+                        const newItem = div.firstElementChild;
+                        list.insertBefore(newItem, list.firstChild);
+                        setTimeout(() => newItem.classList.remove('bg-[#fe9e00]/20'), 2000);
+                        if (data.chat.status !== 'waiting') {
+                            playNotificationSound();
+                        }
+                    } else {
+                        const nameEl = existingItem.querySelector('h4');
+                        if (nameEl) nameEl.textContent = data.visitor.name || 'Anonymous';
+                    }
 
-        monitoringChannel.bind('status.changed', function(data) {
-             console.log('Status changed:', data);
-             if (!data.is_online) {
-                 // Fade out from Active Visitors list (hide, don't remove — visitor may return)
-                 const items = document.querySelectorAll(`#list-active [data-session-id="${data.session_id}"], #list-active [data-visitor-id="${data.visitor_id}"]`);
-                 items.forEach(item => {
-                     item.style.transition = 'opacity 0.5s';
-                     item.style.opacity = '0';
-                     setTimeout(() => { item.style.display = 'none'; }, 500);
-                 });
-                 // Hide green dots in All Chats sidebar
-                 document.querySelectorAll(`[data-session-id="${data.session_id}"] .online-dot`).forEach(dot => {
-                     dot.classList.add('hidden');
-                 });
-                 // Update header if viewing this visitor's chat
-                 @if(isset($chat) && $chat && $chat->visitorSession)
-                 if (data.session_id == {{ $chat->visitorSession->id }}) {
-                     const statusEl = document.getElementById('visitor-status');
-                     if (statusEl) {
-                         const clientName = '{{ $chat->client->name }}';
-                         statusEl.innerHTML = clientName + ' • <span>Last seen just now</span>';
-                     }
-                     const headerDot = document.getElementById('current-page-indicator');
-                     if (headerDot) headerDot.classList.add('hidden');
-                 }
-                 @endif
-             } else {
-                 // Visitor came back online — restore in Active Visitors list
-                 let restored = false;
-                 const hiddenItems = document.querySelectorAll(`#list-active [data-session-id="${data.session_id}"], #list-active [data-visitor-id="${data.visitor_id}"]`);
-                 hiddenItems.forEach(item => {
-                     item.style.display = '';
-                     item.style.opacity = '1';
-                     restored = true;
-                 });
+                    // Also add/update in All Chats tab
+                    const allList = document.getElementById('list-all');
+                    const allItemId = 'all-chat-item-' + data.chat.id;
+                    let allExisting = document.getElementById(allItemId);
+                    if (!allExisting && allList) {
+                        const allEmpty = allList.querySelector('.text-center');
+                        if (allEmpty && allEmpty.innerText.includes('No chats')) allEmpty.remove();
+                        const div = document.createElement('div');
+                        div.innerHTML = `
+                            <a href="${chatUrl}" id="${allItemId}" class="block p-4 border-b border-[#222] hover:bg-[#1a1a1a] transition-colors duration-1000 ease-out bg-[#fe9e00]/20">
+                                <div class="flex items-start gap-3">
+                                    <div class="w-10 h-10 bg-[#fe9e00]/20 rounded-full flex items-center justify-center shrink-0">
+                                        <span class="text-[#fe9e00] font-semibold text-sm">${(data.visitor.name || 'A').substring(0,2).toUpperCase()}</span>
+                                    </div>
+                                    <div class="flex-1 min-w-0">
+                                        <div class="flex items-center justify-between">
+                                            <h4 class="font-medium truncate">${data.visitor.name || 'Anonymous'}</h4>
+                                            <span class="w-2 h-2 bg-green-500 rounded-full shrink-0"></span>
+                                        </div>
+                                        <p class="text-xs text-gray-500 truncate">${data.chat.client_name || 'Client'}</p>
+                                        <p class="text-sm text-gray-400 truncate mt-1">Just now</p>
+                                    </div>
+                                </div>
+                            </a>
+                        `;
+                        const newAllItem = div.firstElementChild;
+                        allList.insertBefore(newAllItem, allList.firstChild);
+                        setTimeout(() => newAllItem.classList.remove('bg-[#fe9e00]/20'), 2000);
+                    }
+                }
+            });
 
-                 // Restore green dots in All Chats sidebar
-                 document.querySelectorAll(`[data-session-id="${data.session_id}"] .online-dot`).forEach(dot => {
-                     dot.classList.remove('hidden');
-                 });
+            // status.changed — sidebar DOM only (ring stop handled by partial)
+            monitoringChannel.bind('status.changed', function(data) {
+                if (!data.is_online) {
+                    const items = document.querySelectorAll(`#list-active [data-session-id="${data.session_id}"], #list-active [data-visitor-id="${data.visitor_id}"]`);
+                    items.forEach(item => {
+                        item.style.transition = 'opacity 0.5s';
+                        item.style.opacity = '0';
+                        setTimeout(() => { item.style.display = 'none'; }, 500);
+                    });
+                    document.querySelectorAll(`[data-session-id="${data.session_id}"] .online-dot`).forEach(dot => {
+                        dot.classList.add('hidden');
+                    });
+                    @if(isset($chat) && $chat && $chat->visitorSession)
+                    if (data.session_id == {{ $chat->visitorSession->id }}) {
+                        const statusEl = document.getElementById('visitor-status');
+                        if (statusEl) {
+                            const clientName = '{{ $chat->client->name }}';
+                            statusEl.innerHTML = clientName + ' • <span>Last seen just now</span>';
+                        }
+                        const headerDot = document.getElementById('current-page-indicator');
+                        if (headerDot) headerDot.classList.add('hidden');
+                    }
+                    @endif
+                } else {
+                    const hiddenItems = document.querySelectorAll(`#list-active [data-session-id="${data.session_id}"], #list-active [data-visitor-id="${data.visitor_id}"]`);
+                    hiddenItems.forEach(item => {
+                        item.style.display = '';
+                        item.style.opacity = '1';
+                    });
+                    document.querySelectorAll(`[data-session-id="${data.session_id}"] .online-dot`).forEach(dot => {
+                        dot.classList.remove('hidden');
+                    });
+                    @if(isset($chat) && $chat && $chat->visitorSession)
+                    if (data.session_id == {{ $chat->visitorSession->id }}) {
+                        const statusEl = document.getElementById('visitor-status');
+                        if (statusEl) {
+                            const clientName = '{{ $chat->client->name }}';
+                            statusEl.innerHTML = clientName + ' • <span class="text-green-400">Online</span>';
+                        }
+                        const headerDot = document.getElementById('current-page-indicator');
+                        if (headerDot) headerDot.classList.remove('hidden');
+                    }
+                    @endif
+                }
+            });
+        }); // end vtWaitForPusher
 
-                 // Update header if viewing this visitor's chat
-                 @if(isset($chat) && $chat && $chat->visitorSession)
-                 if (data.session_id == {{ $chat->visitorSession->id }}) {
-                     const statusEl = document.getElementById('visitor-status');
-                     if (statusEl) {
-                         const clientName = '{{ $chat->client->name }}';
-                         statusEl.innerHTML = clientName + ' • <span class="text-green-400">Online</span>';
-                     }
-                     const headerDot = document.getElementById('current-page-indicator');
-                     if (headerDot) headerDot.classList.remove('hidden');
-                 }
-                 @endif
-             }
-         });
+        // Function to initiate chat via POST
+        window.initiateChat = function(sessionId) {
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = '/inbox/session/' + sessionId;
+            const csrfInput = document.createElement('input');
+            csrfInput.type = 'hidden';
+            csrfInput.name = '_token';
+            csrfInput.value = document.querySelector('meta[name="csrf-token"]').content;
+            form.appendChild(csrfInput);
+            document.body.appendChild(form);
+            form.submit();
+        };
 
         @if(isset($chat) && $chat)
         const chatId = {{ $chat->id }}; // Must use numeric ID to match broadcast channel
         const sessionId = {{ $chat->visitorSession?->id ?? 'null' }};
 
-        // Subscribe to chat channel (public)
+        // Subscribe to chat channel — must wait for vtPusher from the partial
+        vtWaitForPusher(function(pusher) {
         const chatChannel = pusher.subscribe('chat.' + chatId);
         
         chatChannel.bind('message.sent', function(data) {
@@ -998,7 +926,8 @@
             }
             container.scrollTop = container.scrollHeight;
             // Update sidebar item
-            const sidebarItem = document.getElementById('chat-item-' + data.chat_id);
+            const sidebarItem = document.getElementById('active-chat-item-' + data.chat_id)
+                             || document.getElementById('all-chat-item-' + data.chat_id);
             if (sidebarItem) {
                 const nameEl = sidebarItem.querySelector('h4');
                 if (nameEl && !nameEl.querySelector('.closed-badge')) {
@@ -1036,6 +965,7 @@
                 updateCurrentPage(data.page_url, data.page_title);
             });
         }
+        }); // end vtWaitForPusher (chat channel subscriptions)
         @endif
 
         function addMessage(msg) {
@@ -1108,22 +1038,9 @@
             setTimeout(() => indicator.classList.add('hidden'), 3000);
         }
 
-        // Create audio context on first user interaction
-        let audioContext = null;
-        function initAudioContext() {
-            if (!audioContext) {
-                audioContext = new (window.AudioContext || window.webkitAudioContext)();
-            }
-            return audioContext;
-        }
-
-        // Initialize on first click/keypress
-        document.addEventListener('click', initAudioContext, { once: true });
-        document.addEventListener('keypress', initAudioContext, { once: true });
-
         function playNotificationSound() {
             try {
-                const ctx = initAudioContext();
+                const ctx = vtInitAudio();
                 if (ctx.state === 'suspended') {
                     ctx.resume();
                 }
@@ -1142,86 +1059,6 @@
                 setTimeout(() => oscillator.stop(), 150);
             } catch (e) {
                 console.log('Could not play notification sound:', e);
-            }
-        }
-
-        // In-app slider toast notification
-        function showToast({ title, body, icon, onClick, duration = 6000 }) {
-            const container = document.getElementById('toast-container');
-            const toast = document.createElement('div');
-            toast.className = 'toast-slide-in pointer-events-auto cursor-pointer bg-[#1a1a1a] border border-[#333] rounded-xl shadow-2xl p-4 flex items-start gap-3';
-            toast.innerHTML = `
-                <div class="w-10 h-10 bg-[#fe9e00]/20 rounded-full flex items-center justify-center shrink-0">
-                    <span class="text-[#fe9e00] font-semibold text-sm">${icon || '👤'}</span>
-                </div>
-                <div class="flex-1 min-w-0">
-                    <p class="text-sm font-semibold text-white">${title}</p>
-                    <p class="text-xs text-gray-400 mt-0.5 truncate">${body}</p>
-                </div>
-                <button class="text-gray-500 hover:text-white shrink-0 mt-0.5" onclick="event.stopPropagation(); this.closest('.toast-slide-in, .toast-slide-out').classList.add('toast-slide-out'); setTimeout(() => this.closest('.toast-slide-in, .toast-slide-out')?.remove(), 300);">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
-                </button>
-            `;
-            if (onClick) {
-                toast.addEventListener('click', function() {
-                    onClick();
-                    toast.classList.add('toast-slide-out');
-                    setTimeout(() => toast.remove(), 300);
-                });
-            }
-            container.appendChild(toast);
-            // Auto-dismiss
-            setTimeout(() => {
-                if (toast.parentNode) {
-                    toast.classList.add('toast-slide-out');
-                    setTimeout(() => toast.remove(), 300);
-                }
-            }, duration);
-        }
-
-        // Ringing system for new waiting chats
-        // Preload ringtone audio file — loop natively via Audio element
-        const ringtoneAudio = new Audio('/ringtone.wav');
-        ringtoneAudio.loop = true;
-        ringtoneAudio.preload = 'auto';
-        ringtoneAudio.addEventListener('error', e => console.error('Ringtone load error:', e));
-        ringtoneAudio.addEventListener('ended', () => console.log('Ringtone ended event (should not happen with loop=true)'));
-        let ringingChats = new Set();
-
-        function startRinging(chatId) {
-            console.log('startRinging called for:', chatId, 'paused:', ringtoneAudio.paused, 'loop:', ringtoneAudio.loop);
-            ringingChats.add(chatId);
-            updateRingingBanner();
-            if (!ringtoneAudio.paused) return; // Already playing
-            ringtoneAudio.currentTime = 0;
-            ringtoneAudio.play().then(() => {
-                console.log('Ringtone playing, loop:', ringtoneAudio.loop, 'duration:', ringtoneAudio.duration);
-            }).catch(e => console.log('Ringtone autoplay blocked:', e));
-        }
-
-        function stopRinging(chatId) {
-            if (chatId) {
-                ringingChats.delete(chatId);
-            } else {
-                ringingChats.clear();
-            }
-            if (ringingChats.size === 0) {
-                ringtoneAudio.pause();
-                ringtoneAudio.currentTime = 0;
-            }
-            updateRingingBanner();
-        }
-
-        function updateRingingBanner() {
-            const banner = document.getElementById('ringing-banner');
-            if (!banner) return;
-            if (ringingChats.size > 0) {
-                const count = ringingChats.size;
-                banner.querySelector('.ringing-text').textContent =
-                    count === 1 ? '1 new chat waiting — click to answer' : `${count} new chats waiting — click to answer`;
-                banner.classList.remove('hidden');
-            } else {
-                banner.classList.add('hidden');
             }
         }
 
@@ -1332,6 +1169,7 @@
         });
         } // end if (messageFormEl)
         
+        @if(isset($chat) && $chat)
         function markAsRead() {
             fetch('/dashboard/chat/' + chatId + '/read', {
                 method: 'POST',
@@ -1348,12 +1186,13 @@
             if (document.visibilityState === 'visible') {
                 markAsRead();
                 window.unreadCount = 0;
-                document.title = @json(isset($chat) && $chat ? "Chat #{$chat->id} - " . ($chat->visitor->name ?? 'Anonymous') : 'Live Chat');
+                document.title = @json("Chat #{$chat->id} - " . ($chat->visitor->name ?? 'Anonymous'));
             }
         });
 
         // Scroll to bottom on load
         document.getElementById('messages-container').scrollTop = document.getElementById('messages-container').scrollHeight;
+        @endif
 
         // Tab switching
         function switchTab(tab) {
@@ -1608,5 +1447,6 @@
         @endif
         @endif
     </script>
+    @include('partials.notification-ringtone')
 </body>
 </html>
