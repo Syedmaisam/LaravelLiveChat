@@ -383,6 +383,7 @@
 
     (function () {
         var waiting = @json(($waitingChats ?? collect())->map(fn($c) => ['id' => $c->id, 'uuid' => $c->uuid, 'session_id' => $c->visitor_session_id])->values());
+        var onlineSessions = @json(($onlineSessions ?? collect())->pluck('id')->values());
 
         waiting.forEach(function (c) {
             if (c.session_id) {
@@ -393,6 +394,14 @@
             if (!_dismissed.has(key)) {
                 _addRing(key, c.uuid, 'Chat #' + c.id);
                 _subscribeChatChannel(c.id);
+            }
+        });
+
+        // Ring for online visitors who haven't started a chat yet
+        onlineSessions.forEach(function (sid) {
+            var key = 's:' + sid;
+            if (!_dismissed.has(key)) {
+                _addRing(key, null, 'Visitor');
             }
         });
     }());
