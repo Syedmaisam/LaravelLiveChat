@@ -464,7 +464,18 @@
 
     // Visitor closed their browser tab / window
     monitoringChannel.bind('status.changed', function (data) {
-        if (data.is_online || !data.session_id) return;
+        if (!data.session_id) return;
+
+        // Visitor came online — ring if not already ringing for this session.
+        // Covers returning visitors who skip visitor.joined.
+        if (data.is_online) {
+            var sKey = 's:' + data.session_id;
+            if (!_rings[sKey]) {
+                _addRing(sKey, null, 'Visitor');
+                _toast('New Visitor 🔔', 'A visitor is on your site', '👤', null);
+            }
+            return;
+        }
 
         var sid = data.session_id;
         var hadSessionRing = !!_rings['s:' + sid];
