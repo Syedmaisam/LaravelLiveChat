@@ -6,7 +6,9 @@ use App\Http\Controllers\ClientController;
 use App\Http\Controllers\DashboardController;
 use Illuminate\Support\Facades\Route;
 
-Route::redirect('/', '/demo');
+Route::redirect('/', function () {
+    return 'Home page hehehehe';
+});
 
 Route::get('/demo', function () {
     return view('demo');

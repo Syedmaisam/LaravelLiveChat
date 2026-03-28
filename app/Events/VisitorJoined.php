@@ -5,12 +5,11 @@ namespace App\Events;
 use App\Models\Visitor;
 use Illuminate\Broadcasting\Channel;
 use Illuminate\Broadcasting\InteractsWithSockets;
-use Illuminate\Broadcasting\PrivateChannel;
-use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
+use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 
-class VisitorJoined implements ShouldBroadcast
+class VisitorJoined implements ShouldBroadcastNow
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
@@ -21,7 +20,7 @@ class VisitorJoined implements ShouldBroadcast
     public function broadcastOn(): array
     {
         return [
-            new Channel('visitors.' . $this->visitor->client_id),
+            new Channel('visitors.'.$this->visitor->client_id),
             new Channel('monitoring'),
         ];
     }
@@ -34,7 +33,7 @@ class VisitorJoined implements ShouldBroadcast
     public function broadcastWith(): array
     {
         $latestSession = $this->visitor->sessions()->latest()->first();
-        
+
         return [
             'visitor' => [
                 'id' => $this->visitor->id,

@@ -116,22 +116,6 @@
         <span class="animate-pulse">Reconnecting to server...</span>
     </div>
 
-    <!-- Ringing Banner for new waiting chats -->
-    <div id="ringing-banner" class="hidden bg-green-500/20 border-b border-green-500/40 px-4 py-3 text-center shrink-0 cursor-pointer hover:bg-green-500/30 transition-colors"
-         onclick="const el = document.querySelector('[data-ringing-chat]'); if (el) el.click();">
-        <div class="flex items-center justify-center gap-3">
-            <span class="relative flex h-3 w-3">
-                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                <span class="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
-            </span>
-            <span class="ringing-text text-green-400 font-medium text-sm">1 new chat waiting — click to answer</span>
-            <span class="relative flex h-3 w-3">
-                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                <span class="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
-            </span>
-        </div>
-    </div>
-
     @if(!Auth::user()->active_pseudo_name)
     <!-- Pseudo Name Setup Modal -->
     <div id="pseudo-name-setup-modal" class="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
@@ -633,19 +617,6 @@
                 }
             });
 
-            // Private channel for per-agent notifications
-            const agentChannel = pusher.subscribe('private-agent.' + userId);
-            agentChannel.bind('agent.notification', function(data) {
-                if (!data.url || !window.location.href.includes(data.url)) {
-                    if ('Notification' in window && Notification.permission === 'granted') {
-                        new Notification(data.title, { body: data.body });
-                    }
-                }
-            });
-
-            if ('Notification' in window && Notification.permission === 'default') {
-                Notification.requestPermission();
-            }
 
             // visitor.joined — sidebar DOM only (ring + toast handled by partial)
             monitoringChannel.bind('visitor.joined', function(data) {

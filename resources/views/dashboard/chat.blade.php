@@ -697,5 +697,6 @@
         };
         @endif
     </script>
+    @include('partials.notification-ringtone')
 </body>
 </html>
