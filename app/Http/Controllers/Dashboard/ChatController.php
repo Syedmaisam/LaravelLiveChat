@@ -20,7 +20,7 @@ class ChatController extends Controller
         $user = Auth::user();
 
         // Verify agent has access
-        if (!$user->clients()->where('clients.id', $chat->client_id)->exists()) {
+        if (! $user->isAdmin() && ! $user->clients()->where('clients.id', $chat->client_id)->exists()) {
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
@@ -46,7 +46,7 @@ class ChatController extends Controller
 
         // Get the sender name at this moment
         $senderName = $user->active_pseudo_name ?? $user->name;
-        
+
         $message = Message::create([
             'chat_id' => $chat->id,
             'sender_type' => 'agent',
@@ -58,7 +58,7 @@ class ChatController extends Controller
         ]);
 
         event(new MessageSent($message));
-        
+
         // Also send proactive message notification to widget (for toast above icon)
         // This ensures visitor sees message even if they haven't opened chat yet
         if ($chat->visitor) {
@@ -73,6 +73,8 @@ class ChatController extends Controller
         return response()->json([
             'message' => [
                 'id' => $message->id,
+                'sender_type' => 'agent',
+                'message_type' => 'text',
                 'message' => $message->message,
                 'sender_name' => $user->active_pseudo_name ?? $user->name,
                 'created_at' => $message->created_at->toIso8601String(),
@@ -84,7 +86,7 @@ class ChatController extends Controller
     {
         $user = Auth::user();
 
-        if (!$user->clients()->where('clients.id', $chat->client_id)->exists()) {
+        if (! $user->isAdmin() && ! $user->clients()->where('clients.id', $chat->client_id)->exists()) {
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
@@ -105,11 +107,11 @@ class ChatController extends Controller
 
         $file = $request->file('file');
         $path = $file->store("chat-files/{$chat->id}", 'local');
-        $filename = time() . '_' . $file->getClientOriginalName();
+        $filename = time().'_'.$file->getClientOriginalName();
 
         // Get the sender name at this moment
         $senderName = $user->active_pseudo_name ?? $user->name;
-        
+
         $message = Message::create([
             'chat_id' => $chat->id,
             'sender_type' => 'agent',
@@ -145,7 +147,7 @@ class ChatController extends Controller
     {
         $user = Auth::user();
 
-        if (!$user->clients()->where('clients.id', $chat->client_id)->exists()) {
+        if (! $user->isAdmin() && ! $user->clients()->where('clients.id', $chat->client_id)->exists()) {
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
@@ -154,12 +156,30 @@ class ChatController extends Controller
         return response()->json(['success' => true]);
     }
 
-    public function joinChat(Chat $chat)
+    public function joinChat(Request $request, Chat $chat)
     {
         $user = Auth::user();
 
-        if (!$user->clients()->where('clients.id', $chat->client_id)->exists()) {
+        if (! $user->isAdmin() && ! $user->clients()->where('clients.id', $chat->client_id)->exists()) {
             return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
+        $request->validate([
+            'pseudo_name' => 'required|string|max:100',
+        ]);
+
+        $pseudoName = $request->input('pseudo_name');
+
+        // Update user's pseudo names if new
+        $pseudoNames = $user->pseudo_names ?? [];
+        if (! in_array($pseudoName, $pseudoNames)) {
+            $pseudoNames[] = $pseudoName;
+            $user->update([
+                'pseudo_names' => array_values(array_filter($pseudoNames)),
+                'active_pseudo_name' => $pseudoName,
+            ]);
+        } else {
+            $user->update(['active_pseudo_name' => $pseudoName]);
         }
 
         $participant = ChatParticipant::firstOrCreate(
@@ -169,8 +189,14 @@ class ChatController extends Controller
             ],
             [
                 'joined_at' => now(),
+                'agent_nickname' => $pseudoName,
             ]
         );
+
+        // Update nickname if already existed
+        if (! $participant->wasRecentlyCreated) {
+            $participant->update(['agent_nickname' => $pseudoName]);
+        }
 
         if ($chat->status === 'waiting') {
             $chat->update(['status' => 'active']);
@@ -185,7 +211,7 @@ class ChatController extends Controller
     {
         $user = Auth::user();
 
-        if (!$user->clients()->where('clients.id', $chat->client_id)->exists()) {
+        if (! $user->clients()->where('clients.id', $chat->client_id)->exists()) {
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
@@ -208,11 +234,11 @@ class ChatController extends Controller
     public function downloadFile(Chat $chat, $messageId)
     {
         $user = Auth::user();
-        
+
         // Find message manually - route binding fails with nested params
         $message = Message::findOrFail($messageId);
 
-        if ($message->message_type !== 'file' || !$message->file_path) {
+        if ($message->message_type !== 'file' || ! $message->file_path) {
             abort(404);
         }
 
@@ -222,11 +248,11 @@ class ChatController extends Controller
         }
 
         // Verify agent has access
-        if (!$user->clients()->where('clients.id', $chat->client_id)->exists()) {
+        if (! $user->clients()->where('clients.id', $chat->client_id)->exists()) {
             abort(403);
         }
 
-        if (!Storage::exists($message->file_path)) {
+        if (! Storage::exists($message->file_path)) {
             abort(404, 'File not found');
         }
 
@@ -237,7 +263,7 @@ class ChatController extends Controller
     {
         $user = Auth::user();
 
-        if (!$user->clients()->where('clients.id', $chat->client_id)->exists()) {
+        if (! $user->clients()->where('clients.id', $chat->client_id)->exists()) {
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
@@ -256,7 +282,7 @@ class ChatController extends Controller
     {
         $user = Auth::user();
 
-        if (!$user->clients()->where('clients.id', $chat->client_id)->exists()) {
+        if (! $user->clients()->where('clients.id', $chat->client_id)->exists()) {
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
@@ -279,7 +305,7 @@ class ChatController extends Controller
     {
         $user = Auth::user();
 
-        if (!$user->clients()->where('clients.id', $chat->client_id)->exists()) {
+        if (! $user->clients()->where('clients.id', $chat->client_id)->exists()) {
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
@@ -330,7 +356,7 @@ class ChatController extends Controller
     {
         $user = Auth::user();
 
-        if ($note->user_id !== $user->id && !$user->isAdmin()) {
+        if ($note->user_id !== $user->id && ! $user->isAdmin()) {
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
@@ -343,11 +369,11 @@ class ChatController extends Controller
     {
         $user = Auth::user();
 
-        if (!$user->clients()->where('clients.id', $chat->client_id)->exists()) {
+        if (! $user->clients()->where('clients.id', $chat->client_id)->exists()) {
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
-        $note->update(['is_pinned' => !$note->is_pinned]);
+        $note->update(['is_pinned' => ! $note->is_pinned]);
 
         return response()->json(['success' => true, 'is_pinned' => $note->is_pinned]);
     }
@@ -363,7 +389,7 @@ class ChatController extends Controller
         $user = Auth::user();
 
         // Verify agent has access to this visitor's client
-        if (!$user->clients()->where('clients.id', $visitor->client_id)->exists()) {
+        if (! $user->clients()->where('clients.id', $visitor->client_id)->exists()) {
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
@@ -376,7 +402,7 @@ class ChatController extends Controller
             ->whereIn('status', ['waiting', 'active'])
             ->first();
 
-        if (!$chat) {
+        if (! $chat) {
             // Create a new chat
             $chat = \App\Models\Chat::create([
                 'client_id' => $visitor->client_id,
@@ -396,7 +422,7 @@ class ChatController extends Controller
 
         // Get the sender name at this moment
         $senderName = $user->active_pseudo_name ?? $user->name;
-        
+
         // Create the message
         $message = Message::create([
             'chat_id' => $chat->id,
@@ -418,7 +444,7 @@ class ChatController extends Controller
         event(new MessageSent($message));
 
         // Also broadcast a proactive message notification to visitor's widget
-        
+
         event(new \App\Events\ProactiveMessage(
             $visitor,
             $request->message,

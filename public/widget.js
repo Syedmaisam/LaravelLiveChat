@@ -182,9 +182,6 @@
                                 <p>${config.welcomeMessage}</p>
                             </div>
                         </div>
-                        <div class="typing-indicator" id="typing-indicator" style="display: none;">
-                            <span></span><span></span><span></span>
-                        </div>
                         <div id="scroll-badge" class="scroll-badge" onclick="window.LiveChatWidget.scrollToBottom()">
                             <span>New messages</span>
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M7 13l5 5 5-5M7 6l5 5 5-5"/></svg>
@@ -677,7 +674,11 @@
             .typing-indicator {
                 display: flex;
                 gap: 4px;
-                padding: 8px;
+                padding: 10px 14px;
+                background: #f0f0f0;
+                border-radius: 18px 18px 18px 4px;
+                width: fit-content;
+                margin: 8px 0;
             }
             .typing-indicator span {
                 width: 8px;
@@ -1176,6 +1177,18 @@
             `}).join('');
         }
         
+        // Re-append typing indicator only if actively typing
+        if (isTypingActive) {
+            let indicator = container.querySelector('.typing-indicator');
+            if (!indicator) {
+                indicator = document.createElement('div');
+                indicator.className = 'typing-indicator';
+                indicator.innerHTML = '<span></span><span></span><span></span>';
+                indicator.style.display = 'flex';
+                container.appendChild(indicator);
+            }
+        }
+
         // 2. Decide Scroll Logic AFTER update (but based on state BEFORE update)
         if (state.forceScroll || isAtBottom) {
              container.scrollTop = container.scrollHeight;
@@ -1418,6 +1431,27 @@
                     showTypingIndicator();
                 });
 
+                channel.bind('chat.closed', function(data) {
+                    // Show system message
+                    state.messages.push({
+                        id: 'system-closed',
+                        sender_type: 'system',
+                        message_type: 'text',
+                        message: 'Chat has been ended by the agent.',
+                        created_at: new Date().toISOString()
+                    });
+                    renderMessages();
+                    // Disable input
+                    state.chatClosed = true;
+                    const input = document.getElementById('chat-input');
+                    if (input) {
+                        input.disabled = true;
+                        input.placeholder = 'Chat has ended';
+                    }
+                    const sendBtn = document.getElementById('send-btn');
+                    if (sendBtn) sendBtn.disabled = true;
+                });
+
                 channel.bind('messages.read', function(data) {
                     if (data.reader_type === 'agent') {
                         data.message_ids.forEach(id => {
@@ -1464,14 +1498,36 @@
         }, 3000);
     }
 
+    let isTypingActive = false;
+    let typingHideTimeout = null;
     function showTypingIndicator() {
-        const indicator = document.getElementById('typing-indicator');
-        if (indicator) {
-            indicator.style.display = 'flex';
-            setTimeout(() => {
-                indicator.style.display = 'none';
-            }, 3000);
+        const container = document.getElementById('messages-container');
+        if (!container) return;
+
+        isTypingActive = true;
+
+        // Clear previous timeout
+        if (typingHideTimeout) clearTimeout(typingHideTimeout);
+
+        // Create or reuse indicator inside messages container
+        let indicator = container.querySelector('.typing-indicator');
+        if (!indicator) {
+            indicator = document.createElement('div');
+            indicator.className = 'typing-indicator';
+            indicator.innerHTML = '<span></span><span></span><span></span>';
+            container.appendChild(indicator);
+            container.scrollTop = container.scrollHeight;
         }
+        indicator.style.display = 'flex';
+
+        // Hide after 3 seconds
+        typingHideTimeout = setTimeout(() => {
+            isTypingActive = false;
+            typingHideTimeout = null;
+            // Query fresh — the old reference may have been destroyed by renderMessages
+            const el = document.getElementById('messages-container')?.querySelector('.typing-indicator');
+            if (el) el.remove();
+        }, 3000);
     }
 
     // Play notification sound using Web Audio API - Pleasant chat notification tone

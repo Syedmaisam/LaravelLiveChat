@@ -40,10 +40,10 @@ class VisitorTrackingController extends Controller
                 ->first();
         }
 
-        if (!$visitor) {
+        if (! $visitor) {
             // Get geolocation data from IP
             $geoData = $this->getGeoLocation($request->ip());
-            
+
             $visitor = Visitor::create([
                 'visitor_key' => Str::uuid(),
                 'client_id' => $client->id,
@@ -76,26 +76,44 @@ class VisitorTrackingController extends Controller
             ]);
         }
 
-        // Get or create session
+        // Get or create session — reuse recent session if visitor returns quickly
         $session = VisitorSession::where('visitor_id', $visitor->id)
             ->where('is_online', true)
             ->latest()
             ->first();
 
-        if (!$session) {
-            $session = VisitorSession::create([
-                'visitor_id' => $visitor->id,
-                'client_id' => $client->id,
-                'session_key' => Str::uuid(),
-                'referrer_url' => $request->referrer_url,
-                'landing_page' => $request->page_url,
-                'current_page' => $request->page_url,
-                'is_online' => true,
-                'started_at' => now(),
-                'last_activity_at' => now(),
-            ]);
+        if (! $session) {
+            // Check for a recent offline session (within 10 minutes) to reuse
+            // This keeps the same session ID so the agent dashboard stays subscribed
+            $recentSession = VisitorSession::where('visitor_id', $visitor->id)
+                ->where('client_id', $client->id)
+                ->where('is_online', false)
+                ->where('last_activity_at', '>', now()->subMinutes(10))
+                ->latest()
+                ->first();
 
-            event(new VisitorOnlineStatusChanged($session, true));
+            if ($recentSession) {
+                $recentSession->update([
+                    'is_online' => true,
+                    'current_page' => $request->page_url,
+                    'last_activity_at' => now(),
+                ]);
+                $session = $recentSession;
+                event(new VisitorOnlineStatusChanged($session, true));
+            } else {
+                $session = VisitorSession::create([
+                    'visitor_id' => $visitor->id,
+                    'client_id' => $client->id,
+                    'session_key' => Str::uuid(),
+                    'referrer_url' => $request->referrer_url,
+                    'landing_page' => $request->page_url,
+                    'current_page' => $request->page_url,
+                    'is_online' => true,
+                    'started_at' => now(),
+                    'last_activity_at' => now(),
+                ]);
+                event(new VisitorOnlineStatusChanged($session, true));
+            }
         } else {
             $session->update([
                 'current_page' => $request->page_url,
@@ -176,7 +194,7 @@ class VisitorTrackingController extends Controller
 
         $visitor = Visitor::where('visitor_key', $request->visitor_key)->first();
 
-        if (!$visitor) {
+        if (! $visitor) {
             return response()->json(['status' => 'not_found'], 404);
         }
 
@@ -234,12 +252,12 @@ class VisitorTrackingController extends Controller
 
         $session = VisitorSession::where('session_key', $request->session_key)->first();
 
-        if (!$session) {
+        if (! $session) {
             return response()->json(['error' => 'Session not found'], 404);
         }
 
-        $wasOffline = !$session->is_online;
-        
+        $wasOffline = ! $session->is_online;
+
         $session->update([
             'is_online' => true,
             'last_activity_at' => now(),
@@ -262,7 +280,7 @@ class VisitorTrackingController extends Controller
     private function cleanupStaleSessions()
     {
         $oneMinuteAgo = now()->subMinutes(1);
-        
+
         $staleSessions = VisitorSession::where('is_online', true)
             ->where('last_activity_at', '<', $oneMinuteAgo)
             ->get();
@@ -271,8 +289,22 @@ class VisitorTrackingController extends Controller
             $session->update([
                 'is_online' => false,
             ]);
-            
+
             event(new VisitorOnlineStatusChanged($session, false));
+
+            // Auto-close waiting chats (no agent has joined yet)
+            $waitingChats = \App\Models\Chat::where('visitor_session_id', $session->id)
+                ->where('status', 'waiting')
+                ->get();
+
+            foreach ($waitingChats as $chat) {
+                $chat->update([
+                    'status' => 'closed',
+                    'ended_at' => now(),
+                    'ended_by' => 'visitor',
+                ]);
+                event(new \App\Events\ChatClosed($chat, 'visitor'));
+            }
         }
     }
 
@@ -282,13 +314,13 @@ class VisitorTrackingController extends Controller
     public function markOffline(Request $request)
     {
         \Log::info('🔴 markOffline called', ['data' => $request->all()]);
-        
+
         $request->validate([
             'session_key' => 'required|uuid',
         ]);
 
         $session = VisitorSession::where('session_key', $request->session_key)->first();
-        
+
         \Log::info('Session lookup', ['found' => $session ? 'yes' : 'no', 'is_online' => $session?->is_online]);
 
         if ($session && $session->is_online) {
@@ -296,9 +328,23 @@ class VisitorTrackingController extends Controller
                 'is_online' => false,
                 'ended_at' => now(),
             ]);
-            
+
             \Log::info('✅ Session marked offline, broadcasting event');
             event(new VisitorOnlineStatusChanged($session, false));
+
+            // Auto-close waiting chats (no agent has joined yet)
+            $waitingChats = \App\Models\Chat::where('visitor_session_id', $session->id)
+                ->where('status', 'waiting')
+                ->get();
+
+            foreach ($waitingChats as $chat) {
+                $chat->update([
+                    'status' => 'closed',
+                    'ended_at' => now(),
+                    'ended_by' => 'visitor',
+                ]);
+                event(new \App\Events\ChatClosed($chat, 'visitor'));
+            }
         }
 
         return response()->json(['success' => true]);
@@ -312,25 +358,46 @@ class VisitorTrackingController extends Controller
         if (preg_match('/tablet|ipad/i', $userAgent)) {
             return 'tablet';
         }
+
         return 'desktop';
     }
 
     private function detectBrowser($userAgent): ?string
     {
-        if (preg_match('/chrome/i', $userAgent)) return 'Chrome';
-        if (preg_match('/firefox/i', $userAgent)) return 'Firefox';
-        if (preg_match('/safari/i', $userAgent)) return 'Safari';
-        if (preg_match('/edge/i', $userAgent)) return 'Edge';
+        if (preg_match('/chrome/i', $userAgent)) {
+            return 'Chrome';
+        }
+        if (preg_match('/firefox/i', $userAgent)) {
+            return 'Firefox';
+        }
+        if (preg_match('/safari/i', $userAgent)) {
+            return 'Safari';
+        }
+        if (preg_match('/edge/i', $userAgent)) {
+            return 'Edge';
+        }
+
         return 'Unknown';
     }
 
     private function detectOS($userAgent): ?string
     {
-        if (preg_match('/windows/i', $userAgent)) return 'Windows';
-        if (preg_match('/macintosh|mac os/i', $userAgent)) return 'macOS';
-        if (preg_match('/linux/i', $userAgent)) return 'Linux';
-        if (preg_match('/android/i', $userAgent)) return 'Android';
-        if (preg_match('/iphone|ipad|ipod/i', $userAgent)) return 'iOS';
+        if (preg_match('/windows/i', $userAgent)) {
+            return 'Windows';
+        }
+        if (preg_match('/macintosh|mac os/i', $userAgent)) {
+            return 'macOS';
+        }
+        if (preg_match('/linux/i', $userAgent)) {
+            return 'Linux';
+        }
+        if (preg_match('/android/i', $userAgent)) {
+            return 'Android';
+        }
+        if (preg_match('/iphone|ipad|ipod/i', $userAgent)) {
+            return 'iOS';
+        }
+
         return 'Unknown';
     }
 
@@ -347,13 +414,13 @@ class VisitorTrackingController extends Controller
         try {
             $response = file_get_contents("http://ip-api.com/json/{$ip}?fields=status,country,countryCode,city,timezone,isp");
             $data = json_decode($response, true);
-            
+
             if ($data && $data['status'] === 'success') {
                 return $data;
             }
         } catch (\Exception $e) {
             // Log error but don't fail the request
-            \Log::warning('Geolocation lookup failed: ' . $e->getMessage());
+            \Log::warning('Geolocation lookup failed: '.$e->getMessage());
         }
 
         return [];

@@ -23,8 +23,8 @@ class ChatTransferred implements ShouldBroadcast
     public function broadcastOn(): array
     {
         return [
-            new PrivateChannel('chat.' . $this->chat->id),
-            new PrivateChannel('agent.' . $this->transfer->to_agent_id),
+            new Channel('chat.'.$this->chat->id),
+            new PrivateChannel('agent.'.$this->transfer->to_agent_id),
         ];
     }
 

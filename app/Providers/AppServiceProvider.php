@@ -39,15 +39,27 @@ class AppServiceProvider extends ServiceProvider
                     ->where('status', '!=', 'closed')
                     ->whereHas('messages', function ($q) {
                         $q->where('is_read', false)
-                          ->where('sender_type', 'visitor');
+                            ->where('sender_type', 'visitor');
                     })
                     ->count();
 
+                // Waiting chats for ringing state restoration on page load
+                // Only include chats where the visitor is still online to avoid phantom "waiting" entries
+                // when the visitor closed their tab but the chat status hasn't been updated yet
+                $waitingChats = Chat::whereIn('client_id', $clientIds)
+                    ->where('status', 'waiting')
+                    ->whereHas('visitorSession', function ($q) {
+                        $q->where('is_online', true);
+                    })
+                    ->get(['id', 'uuid', 'visitor_session_id']);
+
                 $view->with('navVisitorCount', $navVisitorCount);
                 $view->with('navUnreadChatCount', $navUnreadChatCount);
+                $view->with('waitingChats', $waitingChats);
             } else {
                 $view->with('navVisitorCount', 0);
                 $view->with('navUnreadChatCount', 0);
+                $view->with('waitingChats', collect());
             }
         });
     }

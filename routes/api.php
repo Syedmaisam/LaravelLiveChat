@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Route;
 Route::get('/widget/config', [WidgetController::class, 'config']);
 
 // Visitor tracking endpoints (public, authenticated by widget_key)
-Route::prefix('visitor')->group(function () {
+Route::prefix('visitor')->middleware('throttle:60,1')->group(function () {
     Route::post('/track', [VisitorTrackingController::class, 'track']);
     Route::post('/session', [VisitorTrackingController::class, 'createSession']);
     Route::get('/status', [VisitorTrackingController::class, 'getStatus']);
@@ -19,11 +19,11 @@ Route::prefix('visitor')->group(function () {
 });
 
 // Chat endpoints (public, authenticated by widget_key)
-Route::prefix('chat')->group(function () {
+Route::prefix('chat')->middleware('throttle:60,1')->group(function () {
     Route::get('/check-existing', [ChatController::class, 'checkExisting']);
     Route::post('/create', [ChatController::class, 'create']);
     Route::post('/{chat}/message', [ChatController::class, 'sendMessage']);
-    Route::post('/{chat}/typing', [ChatController::class, 'typing']);
+    Route::post('/{chat}/typing', [ChatController::class, 'typing'])->middleware('throttle:10,1');
     Route::get('/{chat}/messages', [ChatController::class, 'getMessages']);
     Route::post('/{chat}/file', [ChatController::class, 'uploadFile']);
     Route::get('/{chat}/file/{message}/download', [ChatController::class, 'downloadFile']);
@@ -35,11 +35,11 @@ Route::prefix('chat')->group(function () {
 Route::prefix('agent')->middleware(['web', 'auth'])->group(function () {
     Route::post('/chat/{chat}/message', [ChatController::class, 'agentSendMessage']);
     Route::post('/chat/{chat}/typing', [ChatController::class, 'agentTyping']);
-    
+
     // Canned responses
     Route::get('/canned-responses/search', [\App\Http\Controllers\Dashboard\CannedResponseController::class, 'search']);
     Route::post('/canned-responses/{cannedResponse}/use', [\App\Http\Controllers\Dashboard\CannedResponseController::class, 'use']);
-    
+
     // Nickname selection
     Route::post('/chat/{chat}/nickname', [ChatController::class, 'updateNickname']);
 });

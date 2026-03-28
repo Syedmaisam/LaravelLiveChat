@@ -52,21 +52,6 @@
                     Notification.requestPermission();
                 }
                 
-                // Subscribe to monitoring channel for new visitors
-                const monitoringChannel = window.reverbClient.subscribe('monitoring');
-                monitoringChannel.bind('visitor.status.changed', function(data) {
-                    if (data.is_online) {
-                        showNotification('Visitor Online', 'A visitor is now online', '{{ route("admin.visitors.index") }}');
-                    }
-                });
-                monitoringChannel.bind('visitor.joined', function(data) {
-                    showNotification(
-                        'New Visitor 🔔', 
-                        `New visitor from ${data.visitor.location.country || 'Unknown'}`, 
-                        '{{ route("admin.visitors.index") }}?session=' + (data.session ? data.session.id : '')
-                    );
-                });
-
                 // Subscribe to agent private channel for notifications
                 const userId = {{ Auth::id() }};
                 console.log('Subscribing to private-agent.' + userId);
@@ -112,8 +97,31 @@
                     
                     // Also show in-page toast
                     showToast(title, body);
+
+                    // Flash document title
+                    flashTitle(title);
                 };
                 
+                let titleInterval;
+                let originalTitle = document.title;
+                
+                window.flashTitle = function(message) {
+                    clearInterval(titleInterval);
+                    let isOriginal = false;
+                    
+                    titleInterval = setInterval(() => {
+                        document.title = isOriginal ? originalTitle : `🔔 ${message}`;
+                        isOriginal = !isOriginal;
+                    }, 1000);
+                    
+                    // Stop flashing when user focuses the window
+                    window.addEventListener('focus', function stopFlashing() {
+                        clearInterval(titleInterval);
+                        document.title = originalTitle;
+                        window.removeEventListener('focus', stopFlashing);
+                    });
+                };
+
                 window.playNotificationSound = function() {
                     // Create a pleasant two-tone notification sound
                     try {
@@ -335,6 +343,7 @@
         </main>
     </div>
     <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    @include('partials.notification-ringtone')
     @stack('scripts')
 </body>
 </html>

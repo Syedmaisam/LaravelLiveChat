@@ -16,9 +16,16 @@
         * { font-family: 'Inter', sans-serif; }
         .messages-container { scroll-behavior: smooth; }
         .message-bubble { word-break: break-word; }
+        @keyframes slideIn { from { transform: translateX(110%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        @keyframes slideOut { from { transform: translateX(0); opacity: 1; } to { transform: translateX(110%); opacity: 0; } }
+        .toast-slide-in { animation: slideIn 0.35s ease-out forwards; }
+        .toast-slide-out { animation: slideOut 0.3s ease-in forwards; }
     </style>
 </head>
 <body class="bg-black text-white h-screen flex flex-col">
+    <!-- Toast Notification Container -->
+    <div id="toast-container" class="fixed top-4 right-4 z-[100] flex flex-col gap-3 pointer-events-none" style="max-width: 380px;"></div>
+
     <!-- Top Header -->
     <header class="bg-[#111] border-b border-[#222] px-4 py-3 flex items-center justify-between shrink-0">
         <div class="flex items-center gap-4">
@@ -104,6 +111,76 @@
     <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
 
 
+    <!-- Connection Banner -->
+    <div id="connection-banner" class="hidden bg-yellow-500/20 border-b border-yellow-500/30 px-4 py-2 text-center text-yellow-400 text-sm shrink-0">
+        <span class="animate-pulse">Reconnecting to server...</span>
+    </div>
+
+    <!-- Ringing Banner for new waiting chats -->
+    <div id="ringing-banner" class="hidden bg-green-500/20 border-b border-green-500/40 px-4 py-3 text-center shrink-0 cursor-pointer hover:bg-green-500/30 transition-colors"
+         onclick="const el = document.querySelector('[data-ringing-chat]'); if (el) el.click();">
+        <div class="flex items-center justify-center gap-3">
+            <span class="relative flex h-3 w-3">
+                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                <span class="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
+            </span>
+            <span class="ringing-text text-green-400 font-medium text-sm">1 new chat waiting — click to answer</span>
+            <span class="relative flex h-3 w-3">
+                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                <span class="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
+            </span>
+        </div>
+    </div>
+
+    @if(!Auth::user()->active_pseudo_name)
+    <!-- Pseudo Name Setup Modal -->
+    <div id="pseudo-name-setup-modal" class="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
+        <div class="bg-[#111] border border-[#333] rounded-xl w-full max-w-md overflow-hidden">
+            <div class="p-4 border-b border-[#222]">
+                <h3 class="text-lg font-semibold text-white">Set Your Display Name</h3>
+            </div>
+            <div class="p-6">
+                <p class="text-sm text-gray-400 mb-2">Before you start chatting, choose a display name that visitors will see.</p>
+                <p class="text-xs text-gray-500 mb-6">This helps keep your real identity private. You can change it anytime in Profile Settings.</p>
+                <form id="pseudo-name-setup-form" onsubmit="event.preventDefault(); savePseudoName(this);">
+                    <label class="block text-sm font-medium text-gray-400 mb-2">Display Name</label>
+                    <input type="text" name="pseudo_name" placeholder="e.g. Support Sarah, Tech Tom" required
+                        class="w-full bg-[#222] border border-[#333] rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-[#fe9e00] mb-4">
+                    <button type="submit" id="pseudo-name-save-btn"
+                        class="w-full bg-[#fe9e00] text-black py-2.5 rounded-lg font-semibold hover:bg-[#e08e00] transition-colors">
+                        Save & Continue
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+    <script>
+        function savePseudoName(form) {
+            const btn = form.querySelector('#pseudo-name-save-btn');
+            const name = form.querySelector('input[name="pseudo_name"]').value.trim();
+            if (!name) return;
+            btn.disabled = true;
+            btn.textContent = 'Saving...';
+            fetch('{{ route("profile.add.nickname") }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+                },
+                body: JSON.stringify({ nickname: name, set_active: true })
+            })
+            .then(res => res.json())
+            .then(data => {
+                document.getElementById('pseudo-name-setup-modal').remove();
+            })
+            .catch(() => {
+                btn.disabled = false;
+                btn.textContent = 'Save & Continue';
+            });
+        }
+    </script>
+    @endif
+
     <!-- Main Content -->
     <div class="flex-1 flex overflow-hidden">
         <!-- Left Sidebar -->
@@ -158,7 +235,7 @@
                     @endphp
                     @if($visitorChat)
                         {{-- Visitor has a chat - link to it --}}
-                        <a href="{{ route('inbox.chat', $visitorChat) }}" id="chat-item-{{ $visitorChat->id }}" data-visitor-id="{{ $session->visitor_id }}"
+                        <a href="{{ route('inbox.chat', $visitorChat) }}" id="chat-item-{{ $visitorChat->id }}" data-visitor-id="{{ $session->visitor_id }}" data-session-id="{{ $session->id }}"
                            class="block p-4 border-b border-[#222] hover:bg-[#1a1a1a] {{ $isCurrentChat ? 'bg-[#1a1a1a]' : '' }}">
                             <div class="flex items-start gap-3">
                                 <div class="w-10 h-10 bg-[#fe9e00]/20 rounded-full flex items-center justify-center shrink-0">
@@ -176,7 +253,7 @@
                         </a>
                     @else
                         {{-- Visitor online but no chat yet - clickable to initiate chat --}}
-                        <div onclick="initiateChat({{ $session->id }})" id="session-item-{{ $session->id }}" data-visitor-id="{{ $session->visitor_id }}"
+                        <div onclick="initiateChat({{ $session->id }})" id="session-item-{{ $session->id }}" data-visitor-id="{{ $session->visitor_id }}" data-session-id="{{ $session->id }}"
                            class="cursor-pointer block p-4 border-b border-[#222] hover:bg-[#1a1a1a]">
                             <div class="flex items-start gap-3">
                                 <div class="w-10 h-10 bg-[#fe9e00]/20 rounded-full flex items-center justify-center shrink-0">
@@ -204,6 +281,7 @@
             <div id="list-all" class="flex-1 overflow-y-auto hidden">
                 @forelse($recentChats as $recentChat)
                 <a href="{{ route('inbox.chat', $recentChat) }}" id="chat-item-{{ $recentChat->id }}"
+                   data-session-id="{{ $recentChat->visitor_session_id }}"
                    class="block p-4 border-b border-[#222] hover:bg-[#1a1a1a] {{ isset($chat) && $recentChat->id === $chat->id ? 'bg-[#1a1a1a]' : '' }}">
                     <div class="flex items-start gap-3">
                         <div class="w-10 h-10 bg-[#fe9e00]/20 rounded-full flex items-center justify-center shrink-0">
@@ -217,9 +295,7 @@
                                         <span class="text-[9px] bg-red-500/10 text-red-500 border border-red-500/20 px-1.5 py-0.5 rounded uppercase font-bold tracking-wider">Closed</span>
                                     @endif
                                 </h4>
-                                @if($recentChat->visitorSession?->is_online && $recentChat->status !== 'closed')
-                                <span class="w-2 h-2 bg-green-500 rounded-full shrink-0"></span>
-                                @endif
+                                <span class="online-dot w-2 h-2 bg-green-500 rounded-full shrink-0 {{ ($recentChat->visitorSession?->is_online && $recentChat->status !== 'closed') ? '' : 'hidden' }}"></span>
                             </div>
                             <p class="text-xs text-gray-500 truncate">{{ $recentChat->client->name }}</p>
                             <p class="text-sm text-gray-400 truncate mt-1">
@@ -301,63 +377,124 @@
 
             <!-- Message Input -->
             <div class="border-t border-[#222] p-4 bg-[#111] relative">
-                <!-- Canned Response Dropdown -->
-                <div id="canned-dropdown" class="hidden absolute bottom-full left-4 right-4 mb-2 bg-[#1a1a1a] border border-[#333] rounded-lg shadow-lg max-h-64 overflow-y-auto z-50">
-                    <div id="canned-list" class="divide-y divide-[#222]">
-                        <!-- Populated by JavaScript -->
-                    </div>
-                </div>
-
-                <form id="message-form" class="flex gap-3">
-                    <!-- Nickname Selector -->
-                    @php
-                        $pseudoNames = Auth::user()->pseudo_names ?? [];
-                        $currentName = Auth::user()->active_pseudo_name ?? Auth::user()->name;
-                    @endphp
-                    @if(count($pseudoNames) > 0)
-                    <div class="relative shrink-0" x-data="{ open: false }">
-                        <button type="button" @click="open = !open" 
-                            class="flex items-center gap-2 h-full px-4 bg-[#222] border-[1.5px] border-[#333] hover:border-[#fe9e00] rounded-full text-sm transition-all text-[#fe9e00] font-medium group">
-                            <svg class="w-4 h-4 text-gray-500 group-hover:text-[#fe9e00] transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
-                            </svg>
-                            <span id="selected-nickname">{{ $currentName }}</span>
-                            <svg class="w-3 h-3 text-gray-500 group-hover:text-[#fe9e00] transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-                            </svg>
+                @if(!$isParticipant)
+                    {{-- Read-Only Banner + Join Button --}}
+                    <div class="flex items-center justify-between bg-[#fe9e00]/10 border border-[#fe9e00]/30 rounded-lg p-3">
+                        <div>
+                            <span class="text-[#fe9e00] font-medium text-sm block">Read-Only Mode</span>
+                            <span class="text-gray-400 text-xs">You must join this chat to send messages.</span>
+                        </div>
+                        <button type="button" onclick="document.getElementById('join-chat-modal').classList.remove('hidden')"
+                            class="bg-[#fe9e00] text-black px-5 py-2 rounded-full font-medium hover:bg-[#e08e00] transition-colors text-sm shrink-0">
+                            Join Chat
                         </button>
-                        
-                        <div x-show="open" @click.away="open = false" x-transition 
-                             class="absolute bottom-full left-0 mb-2 w-48 bg-[#1a1a1a] border border-[#333] rounded-lg shadow-xl py-1 z-50">
-                            <div class="px-4 py-2 text-[10px] text-gray-500 font-bold uppercase tracking-wider">Switch Profile</div>
-                            @foreach($pseudoNames as $name)
-                            <button type="button" onclick="selectNickname('{{ $name }}')" 
-                                    class="block w-full text-left px-4 py-2 text-sm hover:bg-[#222] text-gray-300 hover:text-[#fe9e00] flex items-center justify-between group">
-                                <span>{{ $name }}</span>
-                                <span class="opacity-0 group-hover:opacity-100 text-[#fe9e00] text-xs transition-opacity">Select</span>
-                            </button>
-                            @endforeach
+                    </div>
+
+                    {{-- Join Chat Modal (fixed overlay, outside the flex flow) --}}
+                    <div id="join-chat-modal" class="hidden fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4"
+                         x-data="{ pseudoName: '{{ Auth::user()->active_pseudo_name ?? Auth::user()->name }}', newName: '', mode: '{{ count(Auth::user()->pseudo_names ?? []) > 0 ? 'select' : 'new' }}' }">
+                        <div class="bg-[#111] border border-[#333] rounded-xl w-full max-w-md overflow-hidden relative">
+                            <div class="p-4 border-b border-[#222]">
+                                <h3 class="text-lg font-semibold text-white">Join Chat</h3>
+                            </div>
+                            <div class="p-6">
+                                <p class="text-sm text-gray-400 mb-6">Are you sure you want to join this chat? Choose a profile name visible to the visitor.</p>
+                                <form id="perform-join-form" onsubmit="event.preventDefault(); window.performJoinChat(this);">
+                                    @if(count(Auth::user()->pseudo_names ?? []) > 0)
+                                    <div class="mb-4">
+                                        <label class="block text-sm font-medium text-gray-400 mb-2">Select Profile Name</label>
+                                        <select x-show="mode === 'select'" x-model="pseudoName"
+                                            class="w-full bg-[#222] border border-[#333] rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-[#fe9e00]">
+                                            @foreach(Auth::user()->pseudo_names as $pn)
+                                                <option value="{{ $pn }}">{{ $pn }}</option>
+                                            @endforeach
+                                        </select>
+                                        <div class="text-right mt-2" x-show="mode === 'select'">
+                                            <button type="button" @click="mode = 'new'; pseudoName = ''" class="text-xs text-[#fe9e00] hover:underline">+ Create new name</button>
+                                        </div>
+                                    </div>
+                                    @endif
+                                    <div x-show="mode === 'new'">
+                                        <label class="block text-sm font-medium text-gray-400 mb-2">Create Profile Name</label>
+                                        <input type="text" x-model="newName" placeholder="e.g. Support Sarah"
+                                            class="w-full bg-[#222] border border-[#333] rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-[#fe9e00]">
+                                        <p class="text-xs text-gray-500 mt-2">This name will be saved for future use.</p>
+                                        @if(count(Auth::user()->pseudo_names ?? []) > 0)
+                                        <div class="text-right mt-2">
+                                            <button type="button" @click="mode = 'select'; pseudoName = '{{ Auth::user()->active_pseudo_name ?? Auth::user()->name }}'"
+                                                class="text-xs text-gray-400 hover:text-white underline">Cancel &amp; Select Existing</button>
+                                        </div>
+                                        @endif
+                                    </div>
+                                    <div class="mt-6 flex items-center justify-end gap-3">
+                                        <button type="button" onclick="document.getElementById('join-chat-modal').classList.add('hidden')"
+                                            class="px-4 py-2 text-sm text-gray-400 hover:text-white font-medium">Cancel</button>
+                                        <button type="submit"
+                                            class="bg-[#fe9e00] text-black px-6 py-2 rounded-full font-medium hover:bg-[#e08e00] transition-colors">Join Chat</button>
+                                    </div>
+                                    <input type="hidden" name="final_pseudo_name" :value="mode === 'new' ? newName : pseudoName">
+                                </form>
+                            </div>
                         </div>
                     </div>
-                    @endif
-                    <input type="text" id="message-input" 
-                        placeholder="{{ $chat->status === 'active' ? 'Type a message... (type / for quick replies)' : 'Chat has been ended' }}" 
-                        {{ $chat->status !== 'active' ? 'disabled' : '' }}
-                        class="flex-1 bg-[#222] border border-[#333] rounded-full px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-[#fe9e00]">
-                    <button type="button" id="attach-btn" 
-                        {{ $chat->status !== 'active' ? 'disabled' : '' }}
-                        class="p-2 text-gray-400 hover:text-[#fe9e00] disabled:opacity-50 disabled:cursor-not-allowed">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/>
-                        </svg>
-                    </button>
-                    <button type="submit" 
-                        {{ $chat->status !== 'active' ? 'disabled' : '' }}
-                        class="bg-[#fe9e00] text-black px-6 py-2 rounded-full font-medium hover:bg-[#e08e00] disabled:opacity-50 disabled:cursor-not-allowed">
-                        Send
-                    </button>
-                    <input type="file" id="file-input" style="display: none;" accept="image/*,.pdf,.doc,.docx" {{ $chat->status !== 'active' ? 'disabled' : '' }}>
-                </form>
+                @else
+                    {{-- Canned Response Dropdown --}}
+                    <div id="canned-dropdown" class="hidden absolute bottom-full left-4 right-4 mb-2 bg-[#1a1a1a] border border-[#333] rounded-lg shadow-lg max-h-64 overflow-y-auto z-50">
+                        <div id="canned-list" class="divide-y divide-[#222]">
+                            <!-- Populated by JavaScript -->
+                        </div>
+                    </div>
+
+                    <form id="message-form" class="flex gap-3">
+                        <!-- Nickname Selector -->
+                        @php
+                            $pseudoNames = Auth::user()->pseudo_names ?? [];
+                            $currentName = Auth::user()->active_pseudo_name ?? Auth::user()->name;
+                        @endphp
+                        @if(count($pseudoNames) > 0)
+                        <div class="relative shrink-0" x-data="{ open: false }">
+                            <button type="button" @click="open = !open" 
+                                class="flex items-center gap-2 h-full px-4 bg-[#222] border-[1.5px] border-[#333] hover:border-[#fe9e00] rounded-full text-sm transition-all text-[#fe9e00] font-medium group">
+                                <svg class="w-4 h-4 text-gray-500 group-hover:text-[#fe9e00] transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+                                </svg>
+                                <span id="selected-nickname">{{ $currentName }}</span>
+                                <svg class="w-3 h-3 text-gray-500 group-hover:text-[#fe9e00] transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                                </svg>
+                            </button>
+                            <div x-show="open" @click.away="open = false" x-transition 
+                                 class="absolute bottom-full left-0 mb-2 w-48 bg-[#1a1a1a] border border-[#333] rounded-lg shadow-xl py-1 z-50">
+                                <div class="px-4 py-2 text-[10px] text-gray-500 font-bold uppercase tracking-wider">Switch Profile</div>
+                                @foreach($pseudoNames as $name)
+                                <button type="button" onclick="selectNickname('{{ $name }}')" 
+                                        class="block w-full text-left px-4 py-2 text-sm hover:bg-[#222] text-gray-300 hover:text-[#fe9e00] flex items-center justify-between group">
+                                    <span>{{ $name }}</span>
+                                    <span class="opacity-0 group-hover:opacity-100 text-[#fe9e00] text-xs transition-opacity">Select</span>
+                                </button>
+                                @endforeach
+                            </div>
+                        </div>
+                        @endif
+                        <input type="text" id="message-input" 
+                            placeholder="{{ $chat->status === 'active' ? 'Type a message... (type / for quick replies)' : 'Chat has been ended' }}" 
+                            {{ $chat->status !== 'active' ? 'disabled' : '' }}
+                            class="flex-1 bg-[#222] border border-[#333] rounded-full px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-[#fe9e00]">
+                        <button type="button" id="attach-btn" 
+                            {{ $chat->status !== 'active' ? 'disabled' : '' }}
+                            class="p-2 text-gray-400 hover:text-[#fe9e00] disabled:opacity-50 disabled:cursor-not-allowed">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/>
+                            </svg>
+                        </button>
+                        <button type="submit" 
+                            {{ $chat->status !== 'active' ? 'disabled' : '' }}
+                            class="bg-[#fe9e00] text-black px-6 py-2 rounded-full font-medium hover:bg-[#e08e00] disabled:opacity-50 disabled:cursor-not-allowed">
+                            Send
+                        </button>
+                        <input type="file" id="file-input" style="display: none;" accept="image/*,.pdf,.doc,.docx" {{ $chat->status !== 'active' ? 'disabled' : '' }}>
+                    </form>
+                @endif
             </div>
             @else
                 <div class="flex-1 flex flex-col items-center justify-center text-gray-500">
@@ -462,77 +599,70 @@
     </div>
 
     <script>
-        // Initialize Pusher/Reverb
-        const pusher = new Pusher('{{ config('reverb.apps.apps.0.key') }}', {
-            wsHost: '{{ config('broadcasting.connections.reverb.options.host', '127.0.0.1') }}',
-            wsPort: {{ config('broadcasting.connections.reverb.options.port', 8080) }},
-            wssPort: {{ config('broadcasting.connections.reverb.options.port', 8080) }},
-            forceTLS: false,
-            enabledTransports: ['ws', 'wss'],
-            disableStats: true,
-            cluster: 'mt1',
-            authEndpoint: '/broadcasting/auth',
-            auth: {
-                headers: {
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
-                }
-            }
-        });
-
-        // Subscribe to agent private channel for notifications
+        // Current authenticated user ID — used in isMe check for message.sent handler
         const userId = {{ Auth::id() }};
-        console.log('Subscribing to private-agent.' + userId);
-        const agentChannel = pusher.subscribe('private-agent.' + userId);
-        agentChannel.bind('agent.notification', function(data) {
-            console.log('Agent notification received:', data);
-            // Only show notification if not already on this chat page
-            if (!data.url || !window.location.href.includes(data.url)) {
-                if ('Notification' in window && Notification.permission === 'granted') {
-                    new Notification(data.title, { body: data.body });
-                }
-            }
-        });
 
-        // Request notification permission if default
-        if ('Notification' in window && Notification.permission === 'default') {
-            Notification.requestPermission();
+        // Reuse the shared Pusher connection from notification-ringtone partial
+        // The partial is included at the bottom of this page — poll until it is ready
+        function vtWaitForPusher(callback) {
+            if (window.vtPusher && window.vtMonitoringChannel) {
+                callback(window.vtPusher, window.vtMonitoringChannel);
+                return;
+            }
+            const interval = setInterval(function() {
+                if (window.vtPusher && window.vtMonitoringChannel) {
+                    clearInterval(interval);
+                    callback(window.vtPusher, window.vtMonitoringChannel);
+                }
+            }, 50);
         }
 
-        // Subscribe to monitoring channel for new visitors (Unified with Admin Dashboard)
-        const monitoringChannel = pusher.subscribe('monitoring');
-        monitoringChannel.bind('visitor.joined', function(data) {
-             console.log('New visitor joined:', data);
-             playNotificationSound();
-             if ('Notification' in window && Notification.permission === 'granted') {
-                 const notification = new Notification('New Visitor 🔔', {
-                     body: `New visitor from ${data.visitor.location.country || 'Unknown'}`,
-                     icon: '/favicon.ico',
-                     tag: 'new-visitor-' + (data.session ? data.session.id : Date.now())
-                 });
-                 notification.onclick = function() {
-                     window.focus();
-                     window.location.href = '{{ route("admin.visitors.index") }}?session=' + (data.session ? data.session.id : '');
-                 };
-             }
+        vtWaitForPusher(function(pusher, monitoringChannel) {
+            // Connection state banner
+            let wasDisconnected = false;
+            pusher.connection.bind('state_change', function(states) {
+                const banner = document.getElementById('connection-banner');
+                if (states.current === 'connected') {
+                    banner.classList.add('hidden');
+                    if (wasDisconnected) {
+                        window.location.reload();
+                    }
+                } else if (states.current === 'disconnected' || states.current === 'unavailable') {
+                    banner.classList.remove('hidden');
+                    wasDisconnected = true;
+                }
+            });
 
-             // Add to Active Visitors list (Status Item)
-             if (data.session && data.session.id) {
-                 const list = document.getElementById('list-active');
-                 const sessionId = data.session.id;
-                 const itemId = 'session-item-' + sessionId;
-                 
-                 // Remove "No active visitors" message if exists
-                 const emptyMsg = list.querySelector('.text-center');
-                 if (emptyMsg && emptyMsg.innerText.includes('No active visitors')) emptyMsg.remove();
-                 
-                     // Check if visitor already exists in list (deduplicate)
-                     if (list.querySelector(`[data-visitor-id="${data.visitor.id}"]`)) {
-                         return; 
-                     }
+            // Private channel for per-agent notifications
+            const agentChannel = pusher.subscribe('private-agent.' + userId);
+            agentChannel.bind('agent.notification', function(data) {
+                if (!data.url || !window.location.href.includes(data.url)) {
+                    if ('Notification' in window && Notification.permission === 'granted') {
+                        new Notification(data.title, { body: data.body });
+                    }
+                }
+            });
 
-                     if (!document.getElementById(itemId)) {
-                         const div = document.createElement('div');
-                         div.innerHTML = `
+            if ('Notification' in window && Notification.permission === 'default') {
+                Notification.requestPermission();
+            }
+
+            // visitor.joined — sidebar DOM only (ring + toast handled by partial)
+            monitoringChannel.bind('visitor.joined', function(data) {
+                if (data.session && data.session.id) {
+                    const list = document.getElementById('list-active');
+                    if (!list) return;
+                    const sessionId = data.session.id;
+                    const itemId = 'session-item-' + sessionId;
+
+                    const emptyMsg = list.querySelector('.text-center');
+                    if (emptyMsg && emptyMsg.innerText.includes('No active visitors')) emptyMsg.remove();
+
+                    if (list.querySelector(`[data-visitor-id="${data.visitor.id}"]`)) return;
+
+                    if (!document.getElementById(itemId)) {
+                        const div = document.createElement('div');
+                        div.innerHTML = `
                             <div onclick="initiateChat(${sessionId})" id="${itemId}" data-visitor-id="${data.visitor.id}" class="cursor-pointer block p-4 border-b border-[#222] hover:bg-[#1a1a1a] transition-colors duration-1000 ease-out bg-green-500/10">
                                 <div class="flex items-start gap-3">
                                     <div class="w-10 h-10 bg-[#fe9e00]/20 rounded-full flex items-center justify-center shrink-0">
@@ -543,103 +673,160 @@
                                             <h4 class="font-medium truncate">${data.visitor.name || 'Anonymous'}</h4>
                                             <span class="w-2 h-2 bg-green-500 rounded-full shrink-0"></span>
                                         </div>
-                                        <p class="text-xs text-gray-500 truncate">${data.visitor.location.country || 'Unknown Location'}</p>
+                                        <p class="text-xs text-gray-500 truncate">${data.visitor.location?.country || 'Unknown Location'}</p>
                                         <p class="text-xs text-gray-400 truncate mt-1">Click to start chat</p>
                                     </div>
                                 </div>
                             </div>
-                         `;
-                         const newItem = div.firstElementChild;
-                         list.insertBefore(newItem, list.firstChild);
-                         setTimeout(() => newItem.classList.remove('bg-green-500/10'), 2000);
-                     }
-                 }
+                        `;
+                        const newItem = div.firstElementChild;
+                        list.insertBefore(newItem, list.firstChild);
+                        setTimeout(() => newItem.classList.remove('bg-green-500/10'), 2000);
+                        if (typeof switchTab === 'function') switchTab('active');
+                    }
+                }
             });
 
-            // Function to initiate chat via POST
-            window.initiateChat = function(sessionId) {
-                const form = document.createElement('form');
-                form.method = 'POST';
-                form.action = '/inbox/session/' + sessionId;
-                
-                const csrfInput = document.createElement('input');
-                csrfInput.type = 'hidden';
-                csrfInput.name = '_token';
-                csrfInput.value = document.querySelector('meta[name="csrf-token"]').content;
-                form.appendChild(csrfInput);
-                
-                document.body.appendChild(form);
-                form.submit();
-            };
+            // agent.joined — ring/toast handled by partial; no duplicate logic needed here
 
+            // visitor.updated — sidebar DOM only (ring + toast handled by partial)
+            monitoringChannel.bind('visitor.updated', function(data) {
+                if (data.chat && (data.chat.status === 'active' || data.chat.status === 'waiting')) {
+                    const list = document.getElementById('list-active');
+                    const chatUrl = '/inbox/' + (data.chat.uuid || data.chat.id);
+                    const itemId = 'chat-item-' + data.chat.id;
 
-        monitoringChannel.bind('visitor.updated', function(data) {
-             console.log('Visitor updated:', data);
-             if (data.chat && (data.chat.status === 'active' || data.chat.status === 'waiting')) {
-                 const list = document.getElementById('list-active');
-                 const chatUrl = '/dashboard/inbox/' + data.chat.id;
-                 const itemId = 'chat-item-' + data.chat.id;
-                 
-                 // Check if exists
-                 let existingItem = document.getElementById(itemId);
-                 
-                 if (!existingItem) {
-                     // Create new item
-                     const div = document.createElement('div');
-                     div.innerHTML = `
-                        <a href="${chatUrl}" id="${itemId}" class="block p-4 border-b border-[#222] hover:bg-[#1a1a1a] transition-colors duration-1000 ease-out bg-[#fe9e00]/20">
-                            <div class="flex items-start gap-3">
-                                <div class="w-10 h-10 bg-[#fe9e00]/20 rounded-full flex items-center justify-center shrink-0">
-                                    <span class="text-[#fe9e00] font-semibold text-sm">${(data.visitor.name || 'A').substring(0,2).toUpperCase()}</span>
-                                </div>
-                                <div class="flex-1 min-w-0">
-                                    <div class="flex items-center justify-between">
-                                        <h4 class="font-medium truncate">${data.visitor.name || 'Anonymous'}</h4>
-                                        <span class="w-2 h-2 bg-green-500 rounded-full shrink-0"></span>
+                    let existingItem = document.getElementById(itemId);
+
+                    if (!existingItem) {
+                        const div = document.createElement('div');
+                        div.innerHTML = `
+                            <a href="${chatUrl}" id="active-${itemId}" class="block p-4 border-b border-[#222] hover:bg-[#1a1a1a] transition-colors duration-1000 ease-out bg-[#fe9e00]/20">
+                                <div class="flex items-start gap-3">
+                                    <div class="w-10 h-10 bg-[#fe9e00]/20 rounded-full flex items-center justify-center shrink-0">
+                                        <span class="text-[#fe9e00] font-semibold text-sm">${(data.visitor.name || 'A').substring(0,2).toUpperCase()}</span>
                                     </div>
-                                    <p class="text-xs text-gray-500 truncate">${data.chat.client_name || 'Client'}</p>
-                                    <p class="text-sm text-gray-400 truncate mt-1">Active now</p>
+                                    <div class="flex-1 min-w-0">
+                                        <div class="flex items-center justify-between">
+                                            <h4 class="font-medium truncate">${data.visitor.name || 'Anonymous'}</h4>
+                                            <span class="w-2 h-2 bg-green-500 rounded-full shrink-0"></span>
+                                        </div>
+                                        <p class="text-xs text-gray-500 truncate">${data.chat.client_name || 'Client'}</p>
+                                        <p class="text-sm text-gray-400 truncate mt-1">Active now</p>
+                                    </div>
                                 </div>
-                            </div>
-                        </a>
-                     `;
-                     const newItem = div.firstElementChild;
-                     list.insertBefore(newItem, list.firstChild);
-                     
-                     // Remove highlight after 2s
-                     setTimeout(() => {
-                         newItem.classList.remove('bg-[#fe9e00]/20');
-                     }, 2000);
-                     
-                     playNotificationSound();
-                 } else {
-                    // Update existing item info
-                    const nameEl = existingItem.querySelector('h4');
-                    if (nameEl) nameEl.textContent = data.visitor.name || 'Anonymous';
-                 }
-             }
-        });
+                            </a>
+                        `;
+                        const newItem = div.firstElementChild;
+                        list.insertBefore(newItem, list.firstChild);
+                        setTimeout(() => newItem.classList.remove('bg-[#fe9e00]/20'), 2000);
+                        if (data.chat.status !== 'waiting') {
+                            playNotificationSound();
+                        }
+                    } else {
+                        const nameEl = existingItem.querySelector('h4');
+                        if (nameEl) nameEl.textContent = data.visitor.name || 'Anonymous';
+                    }
 
-        monitoringChannel.bind('status.changed', function(data) {
-             console.log('Status changed:', data);
-             if (!data.is_online) {
-                 // Remove from list if offline
-                 // Use data-visitor-id to find the element (works for both session items and chat items)
-                 const items = document.querySelectorAll(`[data-visitor-id="${data.visitor_id}"]`);
-                 items.forEach(item => {
-                     // Add fade out effect
-                     item.style.transition = 'opacity 0.5s, height 0.5s';
-                     item.style.opacity = '0';
-                     setTimeout(() => item.remove(), 500);
-                 });
-             }
-         });
+                    // Also add/update in All Chats tab
+                    const allList = document.getElementById('list-all');
+                    const allItemId = 'all-chat-item-' + data.chat.id;
+                    let allExisting = document.getElementById(allItemId);
+                    if (!allExisting && allList) {
+                        const allEmpty = allList.querySelector('.text-center');
+                        if (allEmpty && allEmpty.innerText.includes('No chats')) allEmpty.remove();
+                        const div = document.createElement('div');
+                        div.innerHTML = `
+                            <a href="${chatUrl}" id="${allItemId}" class="block p-4 border-b border-[#222] hover:bg-[#1a1a1a] transition-colors duration-1000 ease-out bg-[#fe9e00]/20">
+                                <div class="flex items-start gap-3">
+                                    <div class="w-10 h-10 bg-[#fe9e00]/20 rounded-full flex items-center justify-center shrink-0">
+                                        <span class="text-[#fe9e00] font-semibold text-sm">${(data.visitor.name || 'A').substring(0,2).toUpperCase()}</span>
+                                    </div>
+                                    <div class="flex-1 min-w-0">
+                                        <div class="flex items-center justify-between">
+                                            <h4 class="font-medium truncate">${data.visitor.name || 'Anonymous'}</h4>
+                                            <span class="w-2 h-2 bg-green-500 rounded-full shrink-0"></span>
+                                        </div>
+                                        <p class="text-xs text-gray-500 truncate">${data.chat.client_name || 'Client'}</p>
+                                        <p class="text-sm text-gray-400 truncate mt-1">Just now</p>
+                                    </div>
+                                </div>
+                            </a>
+                        `;
+                        const newAllItem = div.firstElementChild;
+                        allList.insertBefore(newAllItem, allList.firstChild);
+                        setTimeout(() => newAllItem.classList.remove('bg-[#fe9e00]/20'), 2000);
+                    }
+                }
+            });
+
+            // status.changed — sidebar DOM only (ring stop handled by partial)
+            monitoringChannel.bind('status.changed', function(data) {
+                if (!data.is_online) {
+                    const items = document.querySelectorAll(`#list-active [data-session-id="${data.session_id}"], #list-active [data-visitor-id="${data.visitor_id}"]`);
+                    items.forEach(item => {
+                        item.style.transition = 'opacity 0.5s';
+                        item.style.opacity = '0';
+                        setTimeout(() => { item.style.display = 'none'; }, 500);
+                    });
+                    document.querySelectorAll(`[data-session-id="${data.session_id}"] .online-dot`).forEach(dot => {
+                        dot.classList.add('hidden');
+                    });
+                    @if(isset($chat) && $chat && $chat->visitorSession)
+                    if (data.session_id == {{ $chat->visitorSession->id }}) {
+                        const statusEl = document.getElementById('visitor-status');
+                        if (statusEl) {
+                            const clientName = '{{ $chat->client->name }}';
+                            statusEl.innerHTML = clientName + ' • <span>Last seen just now</span>';
+                        }
+                        const headerDot = document.getElementById('current-page-indicator');
+                        if (headerDot) headerDot.classList.add('hidden');
+                    }
+                    @endif
+                } else {
+                    const hiddenItems = document.querySelectorAll(`#list-active [data-session-id="${data.session_id}"], #list-active [data-visitor-id="${data.visitor_id}"]`);
+                    hiddenItems.forEach(item => {
+                        item.style.display = '';
+                        item.style.opacity = '1';
+                    });
+                    document.querySelectorAll(`[data-session-id="${data.session_id}"] .online-dot`).forEach(dot => {
+                        dot.classList.remove('hidden');
+                    });
+                    @if(isset($chat) && $chat && $chat->visitorSession)
+                    if (data.session_id == {{ $chat->visitorSession->id }}) {
+                        const statusEl = document.getElementById('visitor-status');
+                        if (statusEl) {
+                            const clientName = '{{ $chat->client->name }}';
+                            statusEl.innerHTML = clientName + ' • <span class="text-green-400">Online</span>';
+                        }
+                        const headerDot = document.getElementById('current-page-indicator');
+                        if (headerDot) headerDot.classList.remove('hidden');
+                    }
+                    @endif
+                }
+            });
+        }); // end vtWaitForPusher
+
+        // Function to initiate chat via POST
+        window.initiateChat = function(sessionId) {
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = '/inbox/session/' + sessionId;
+            const csrfInput = document.createElement('input');
+            csrfInput.type = 'hidden';
+            csrfInput.name = '_token';
+            csrfInput.value = document.querySelector('meta[name="csrf-token"]').content;
+            form.appendChild(csrfInput);
+            document.body.appendChild(form);
+            form.submit();
+        };
 
         @if(isset($chat) && $chat)
         const chatId = {{ $chat->id }}; // Must use numeric ID to match broadcast channel
         const sessionId = {{ $chat->visitorSession?->id ?? 'null' }};
 
-        // Subscribe to chat channel (public)
+        // Subscribe to chat channel — must wait for vtPusher from the partial
+        vtWaitForPusher(function(pusher) {
         const chatChannel = pusher.subscribe('chat.' + chatId);
         
         chatChannel.bind('message.sent', function(data) {
@@ -649,10 +836,24 @@
             
             if (!isMe) {
                 addMessage(data);
-                // Play notification sound
                 playNotificationSound();
                 if (document.visibilityState === 'visible') {
                     markAsRead();
+                } else {
+                    // Update tab title with unread count
+                    window.unreadCount = (window.unreadCount || 0) + 1;
+                    document.title = `(${window.unreadCount}) Live Chat`;
+                }
+
+                // Visitor sent a message — they're definitely online, update status
+                if (data.sender_type === 'visitor') {
+                    const statusEl = document.getElementById('visitor-status');
+                    if (statusEl && !statusEl.innerHTML.includes('Online')) {
+                        const clientName = '{{ $chat->client->name ?? "" }}';
+                        statusEl.innerHTML = clientName + ' • <span class="text-green-400">Online</span>';
+                    }
+                    const headerDot = document.getElementById('current-page-indicator');
+                    if (headerDot) headerDot.classList.remove('hidden');
                 }
             }
         });
@@ -692,38 +893,90 @@
             showTyping();
         });
 
-        // Subscribe to visitor session status changes
-        @if($chat->visitorSession)
-        const sessionChannel = pusher.subscribe('visitor-session.{{ $chat->visitorSession->id }}');
-        sessionChannel.bind('status.changed', function(data) {
-            // Update online/offline indicator in header
-            const statusEl = document.getElementById('visitor-status');
-            if (statusEl) {
-                const clientName = '{{ $chat->client->name }}';
-                if (data.is_online) {
-                    statusEl.innerHTML = clientName + ' • <span class="text-green-400">Online</span>';
-                } else {
-                    statusEl.innerHTML = clientName + ' • <span>Last seen just now</span>';
+        chatChannel.bind('chat.closed', function(data) {
+            // Update status badge
+            const badge = document.getElementById('chat-status-badge');
+            if (badge) {
+                badge.textContent = 'Closed';
+                badge.className = 'px-3 py-1 text-xs rounded-full bg-red-500/20 text-red-400';
+            }
+            // Remove end chat button
+            const endBtn = document.getElementById('end-chat-btn');
+            if (endBtn) endBtn.remove();
+            // Disable message input
+            const input = document.getElementById('message-input');
+            if (input) {
+                input.disabled = true;
+                input.placeholder = 'Chat has been ended';
+            }
+            const sendBtn = document.querySelector('#message-form button[type="submit"]');
+            if (sendBtn) sendBtn.disabled = true;
+            const attachBtn = document.getElementById('attach-btn');
+            if (attachBtn) attachBtn.disabled = true;
+            // Show system message
+            const container = document.getElementById('messages-container');
+            const sysMsg = document.createElement('div');
+            sysMsg.className = 'mb-4 flex justify-center';
+            sysMsg.innerHTML = `<span class="bg-[#222] text-gray-400 px-4 py-1.5 rounded-full text-xs">Chat ended by ${data.ended_by || 'agent'}</span>`;
+            const typingIndicator = document.getElementById('typing-indicator');
+            if (typingIndicator) {
+                container.insertBefore(sysMsg, typingIndicator);
+            } else {
+                container.appendChild(sysMsg);
+            }
+            container.scrollTop = container.scrollHeight;
+            // Update sidebar item
+            const sidebarItem = document.getElementById('active-chat-item-' + data.chat_id)
+                             || document.getElementById('all-chat-item-' + data.chat_id);
+            if (sidebarItem) {
+                const nameEl = sidebarItem.querySelector('h4');
+                if (nameEl && !nameEl.querySelector('.closed-badge')) {
+                    nameEl.insertAdjacentHTML('afterbegin', '<span class="closed-badge text-[9px] bg-red-500/10 text-red-500 border border-red-500/20 px-1.5 py-0.5 rounded uppercase font-bold tracking-wider mr-2">Closed</span>');
                 }
+                // Hide green dot
+                const dot = sidebarItem.querySelector('.online-dot');
+                if (dot) dot.classList.add('hidden');
             }
         });
-        @endif
 
-        // Subscribe to visitor session for page changes
+        // Subscribe to visitor session for status + page changes
         if (sessionId) {
-            const sessionChannel = pusher.subscribe('visitor-session.' + sessionId);
-            sessionChannel.bind('page.changed', function(data) {
+            const visitorSessionChannel = pusher.subscribe('visitor-session.' + sessionId);
+
+            // Online/offline status in header
+            visitorSessionChannel.bind('status.changed', function(data) {
+                const statusEl = document.getElementById('visitor-status');
+                if (statusEl) {
+                    const clientName = '{{ $chat->client->name ?? "" }}';
+                    if (data.is_online) {
+                        statusEl.innerHTML = clientName + ' • <span class="text-green-400">Online</span>';
+                    } else {
+                        statusEl.innerHTML = clientName + ' • <span>Last seen just now</span>';
+                    }
+                }
+                const headerDot = document.getElementById('current-page-indicator');
+                if (headerDot) {
+                    data.is_online ? headerDot.classList.remove('hidden') : headerDot.classList.add('hidden');
+                }
+            });
+
+            // Page navigation tracking
+            visitorSessionChannel.bind('page.changed', function(data) {
                 updateCurrentPage(data.page_url, data.page_title);
             });
         }
+        }); // end vtWaitForPusher (chat channel subscriptions)
         @endif
 
         function addMessage(msg) {
             console.log('Adding message:', msg);
             const container = document.getElementById('messages-container');
+            // Skip if message already exists (avoid duplicates from optimistic + WebSocket)
+            if (msg.id && document.querySelector(`[data-msg-id="${msg.id}"]`)) return;
             const isVisitor = msg.sender_type === 'visitor';
             const div = document.createElement('div');
             div.className = 'mb-4 flex ' + (isVisitor ? 'justify-start' : 'justify-end');
+            div.setAttribute('data-msg-id', msg.id);
             
             let messageContent = '';
             if (msg.message_type === 'file') {
@@ -785,36 +1038,23 @@
             setTimeout(() => indicator.classList.add('hidden'), 3000);
         }
 
-        // Create audio context on first user interaction
-        let audioContext = null;
-        function initAudioContext() {
-            if (!audioContext) {
-                audioContext = new (window.AudioContext || window.webkitAudioContext)();
-            }
-            return audioContext;
-        }
-
-        // Initialize on first click/keypress
-        document.addEventListener('click', initAudioContext, { once: true });
-        document.addEventListener('keypress', initAudioContext, { once: true });
-
         function playNotificationSound() {
             try {
-                const ctx = initAudioContext();
+                const ctx = vtInitAudio();
                 if (ctx.state === 'suspended') {
                     ctx.resume();
                 }
-                
+
                 const oscillator = ctx.createOscillator();
                 const gainNode = ctx.createGain();
-                
+
                 oscillator.connect(gainNode);
                 gainNode.connect(ctx.destination);
-                
+
                 oscillator.frequency.value = 800;
                 oscillator.type = 'sine';
                 gainNode.gain.value = 0.1;
-                
+
                 oscillator.start();
                 setTimeout(() => oscillator.stop(), 150);
             } catch (e) {
@@ -848,12 +1088,28 @@
             currentDiv.insertAdjacentElement('afterend', historyDiv);
         }
 
-        // Send message
-        document.getElementById('message-form').addEventListener('submit', function(e) {
+        // Send message (only when message-form exists, i.e. agent is a participant)
+        const messageFormEl = document.getElementById('message-form');
+        if (messageFormEl) {
+        messageFormEl.addEventListener('submit', function(e) {
             e.preventDefault();
             const input = document.getElementById('message-input');
             const message = input.value.trim();
             if (!message) return;
+
+            // Optimistic UI: show message immediately
+            const tempId = 'temp-' + Date.now();
+            const selectedNickname = document.getElementById('selected-nickname');
+            const senderName = selectedNickname ? selectedNickname.textContent : '{{ Auth::user()->active_pseudo_name ?? Auth::user()->name }}';
+            addMessage({
+                id: tempId,
+                sender_type: 'agent',
+                message_type: 'text',
+                message: message,
+                sender_name: senderName,
+                created_at: new Date().toISOString()
+            });
+            input.value = '';
 
             fetch('/api/agent/chat/' + chatId + '/message', {
                 method: 'POST',
@@ -865,10 +1121,22 @@
             })
             .then(res => res.json())
             .then(data => {
-                input.value = '';
-                addMessage(data.message);
+                // Update temp message with real ID for read receipt tracking
+                const tempEl = document.querySelector(`[data-msg-id="${tempId}"]`);
+                if (tempEl) tempEl.setAttribute('data-msg-id', data.message.id);
+                const statusEl = document.getElementById('msg-status-' + tempId);
+                if (statusEl) statusEl.id = 'msg-status-' + data.message.id;
             })
-            .catch(err => console.error('Send error:', err));
+            .catch(err => {
+                console.error('Send error:', err);
+                // Mark message as failed
+                const tempEl = document.querySelector(`[data-msg-id="${tempId}"]`);
+                if (tempEl) {
+                    const bubble = tempEl.querySelector('.message-bubble');
+                    if (bubble) bubble.classList.add('opacity-50');
+                    tempEl.insertAdjacentHTML('beforeend', '<p class="text-xs text-red-400 text-right mt-1">Failed to send</p>');
+                }
+            });
         });
         
         // File upload
@@ -899,7 +1167,9 @@
             })
             .catch(err => console.error('File upload error:', err));
         });
+        } // end if (messageFormEl)
         
+        @if(isset($chat) && $chat)
         function markAsRead() {
             fetch('/dashboard/chat/' + chatId + '/read', {
                 method: 'POST',
@@ -915,11 +1185,14 @@
         document.addEventListener('visibilitychange', function() {
             if (document.visibilityState === 'visible') {
                 markAsRead();
+                window.unreadCount = 0;
+                document.title = @json("Chat #{$chat->id} - " . ($chat->visitor->name ?? 'Anonymous'));
             }
         });
 
         // Scroll to bottom on load
         document.getElementById('messages-container').scrollTop = document.getElementById('messages-container').scrollHeight;
+        @endif
 
         // Tab switching
         function switchTab(tab) {
@@ -953,6 +1226,7 @@
         const cannedDropdown = document.getElementById('canned-dropdown');
         const cannedList = document.getElementById('canned-list');
 
+        if (messageInput) {
         messageInput.addEventListener('input', function(e) {
             const value = e.target.value;
             const lastChar = value.slice(-1);
@@ -1002,6 +1276,7 @@
                 }
             }
         });
+        } // end if (messageInput)
 
         function fetchCannedResponses(query) {
             fetch(`/api/agent/canned-responses/search?q=${encodeURIComponent(query)}&client_id={{ $chat->client_id }}`, {
@@ -1132,7 +1407,46 @@
             })
             .catch(err => console.error('End chat error:', err));
         }
+
+        @if(!$isParticipant)
+        window.performJoinChat = function(form) {
+            const btn = form.querySelector('button[type="submit"]');
+            btn.disabled = true;
+            btn.textContent = 'Joining...';
+            const pName = (form.querySelector('input[name="final_pseudo_name"]').value || '').trim();
+            if (!pName) {
+                alert('Please provide a profile name before joining.');
+                btn.disabled = false;
+                btn.textContent = 'Join Chat';
+                return;
+            }
+            fetch(`/dashboard/chat/${chatId}/join`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+                },
+                body: JSON.stringify({ pseudo_name: pName })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    window.location.reload();
+                } else if (data.error) {
+                    alert(data.error);
+                    btn.disabled = false;
+                    btn.textContent = 'Join Chat';
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                btn.disabled = false;
+                btn.textContent = 'Join Chat';
+            });
+        };
+        @endif
         @endif
     </script>
+    @include('partials.notification-ringtone')
 </body>
 </html>

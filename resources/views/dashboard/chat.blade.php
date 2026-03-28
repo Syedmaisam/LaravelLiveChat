@@ -150,26 +150,85 @@
             </div>
 
             <!-- Message Input -->
-            <div class="border-t border-[#222] p-4 bg-[#111]">
-                <form id="message-form" class="flex gap-3">
-                    <input type="text" id="message-input" 
-                        placeholder="{{ $chat->status === 'active' ? 'Type a message...' : 'Chat has been ended' }}" 
-                        {{ $chat->status !== 'active' ? 'disabled' : '' }}
-                        class="flex-1 bg-[#222] border border-[#333] rounded-full px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-[#fe9e00]">
-                    <button type="button" id="attach-btn" 
-                        {{ $chat->status !== 'active' ? 'disabled' : '' }}
-                        class="p-2 text-gray-400 hover:text-[#fe9e00] disabled:opacity-50 disabled:cursor-not-allowed">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/>
-                        </svg>
-                    </button>
-                    <button type="submit" 
-                        {{ $chat->status !== 'active' ? 'disabled' : '' }}
-                        class="bg-[#fe9e00] text-black px-6 py-2 rounded-full font-medium hover:bg-[#e08e00] disabled:opacity-50 disabled:cursor-not-allowed">
-                        Send
-                    </button>
-                    <input type="file" id="file-input" style="display: none;" accept="image/*,.pdf,.doc,.docx" {{ $chat->status !== 'active' ? 'disabled' : '' }}>
-                </form>
+            <div class="border-t border-[#222] p-4 bg-[#111] relative">
+                @if(!$isParticipant)
+                    <div class="flex items-center justify-between bg-[#fe9e00]/10 border border-[#fe9e00]/30 rounded-lg p-3">
+                        <div>
+                            <span class="text-[#fe9e00] font-medium text-sm block">Read-Only Mode</span>
+                            <span class="text-gray-400 text-xs">You must join this chat to send messages.</span>
+                        </div>
+                        <button type="button" onclick="document.getElementById('join-chat-modal').classList.remove('hidden')"
+                            class="bg-[#fe9e00] text-black px-5 py-2 rounded-full font-medium hover:bg-[#e08e00] transition-colors text-sm shrink-0">
+                            Join Chat
+                        </button>
+                    </div>
+                    <div id="join-chat-modal" class="hidden fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4"
+                         x-data="{ pseudoName: '{{ Auth::user()->active_pseudo_name ?? Auth::user()->name }}', newName: '', mode: '{{ count(Auth::user()->pseudo_names ?? []) > 0 ? 'select' : 'new' }}' }">
+                        <div class="bg-[#111] border border-[#333] rounded-xl w-full max-w-md overflow-hidden relative">
+                            <div class="p-4 border-b border-[#222]">
+                                <h3 class="text-lg font-semibold text-white">Join Chat</h3>
+                            </div>
+                            <div class="p-6">
+                                <p class="text-sm text-gray-400 mb-6">Are you sure you want to join this chat? Choose a profile name visible to the visitor.</p>
+                                <form id="perform-join-form" onsubmit="event.preventDefault(); window.performJoinChat(this);">
+                                    @if(count(Auth::user()->pseudo_names ?? []) > 0)
+                                    <div class="mb-4">
+                                        <label class="block text-sm font-medium text-gray-400 mb-2">Select Profile Name</label>
+                                        <select x-show="mode === 'select'" x-model="pseudoName"
+                                            class="w-full bg-[#222] border border-[#333] rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-[#fe9e00]">
+                                            @foreach(Auth::user()->pseudo_names as $pn)
+                                                <option value="{{ $pn }}">{{ $pn }}</option>
+                                            @endforeach
+                                        </select>
+                                        <div class="text-right mt-2" x-show="mode === 'select'">
+                                            <button type="button" @click="mode = 'new'; pseudoName = ''" class="text-xs text-[#fe9e00] hover:underline">+ Create new name</button>
+                                        </div>
+                                    </div>
+                                    @endif
+                                    <div x-show="mode === 'new'">
+                                        <label class="block text-sm font-medium text-gray-400 mb-2">Create Profile Name</label>
+                                        <input type="text" x-model="newName" placeholder="e.g. Support Sarah"
+                                            class="w-full bg-[#222] border border-[#333] rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-[#fe9e00]">
+                                        <p class="text-xs text-gray-500 mt-2">This name will be saved for future use.</p>
+                                        @if(count(Auth::user()->pseudo_names ?? []) > 0)
+                                        <div class="text-right mt-2">
+                                            <button type="button" @click="mode = 'select'; pseudoName = '{{ Auth::user()->active_pseudo_name ?? Auth::user()->name }}'"
+                                                class="text-xs text-gray-400 hover:text-white underline">Cancel &amp; Select Existing</button>
+                                        </div>
+                                        @endif
+                                    </div>
+                                    <div class="mt-6 flex items-center justify-end gap-3">
+                                        <button type="button" onclick="document.getElementById('join-chat-modal').classList.add('hidden')"
+                                            class="px-4 py-2 text-sm text-gray-400 hover:text-white font-medium">Cancel</button>
+                                        <button type="submit"
+                                            class="bg-[#fe9e00] text-black px-6 py-2 rounded-full font-medium hover:bg-[#e08e00] transition-colors">Join Chat</button>
+                                    </div>
+                                    <input type="hidden" name="final_pseudo_name" :value="mode === 'new' ? newName : pseudoName">
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                @else
+                    <form id="message-form" class="flex gap-3">
+                        <input type="text" id="message-input" 
+                            placeholder="{{ $chat->status === 'active' ? 'Type a message...' : 'Chat has been ended' }}" 
+                            {{ $chat->status !== 'active' ? 'disabled' : '' }}
+                            class="flex-1 bg-[#222] border border-[#333] rounded-full px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-[#fe9e00]">
+                        <button type="button" id="attach-btn" 
+                            {{ $chat->status !== 'active' ? 'disabled' : '' }}
+                            class="p-2 text-gray-400 hover:text-[#fe9e00] disabled:opacity-50 disabled:cursor-not-allowed">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/>
+                            </svg>
+                        </button>
+                        <button type="submit" 
+                            {{ $chat->status !== 'active' ? 'disabled' : '' }}
+                            class="bg-[#fe9e00] text-black px-6 py-2 rounded-full font-medium hover:bg-[#e08e00] disabled:opacity-50 disabled:cursor-not-allowed">
+                            Send
+                        </button>
+                        <input type="file" id="file-input" style="display: none;" accept="image/*,.pdf,.doc,.docx" {{ $chat->status !== 'active' ? 'disabled' : '' }}>
+                    </form>
+                @endif
             </div>
         </div>
 
@@ -488,8 +547,10 @@
             currentDiv.insertAdjacentElement('afterend', historyDiv);
         }
 
-        // Send message
-        document.getElementById('message-form').addEventListener('submit', function(e) {
+        // Send message (only when message-form exists, i.e. agent is a participant)
+        const messageFormEl = document.getElementById('message-form');
+        if (messageFormEl) {
+        messageFormEl.addEventListener('submit', function(e) {
             e.preventDefault();
             const input = document.getElementById('message-input');
             const message = input.value.trim();
@@ -539,6 +600,7 @@
             })
             .catch(err => console.error('File upload error:', err));
         });
+        } // end if (messageFormEl)
         
         function markAsRead() {
             fetch('/dashboard/chat/' + chatId + '/read', {
@@ -596,6 +658,44 @@
             })
             .catch(err => console.error('End chat error:', err));
         }
+
+        @if(!$isParticipant)
+        window.performJoinChat = function(form) {
+            const btn = form.querySelector('button[type="submit"]');
+            btn.disabled = true;
+            btn.textContent = 'Joining...';
+            const pName = (form.querySelector('input[name="final_pseudo_name"]').value || '').trim();
+            if (!pName) {
+                alert('Please provide a profile name before joining.');
+                btn.disabled = false;
+                btn.textContent = 'Join Chat';
+                return;
+            }
+            fetch(`/dashboard/chat/${chatId}/join`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+                },
+                body: JSON.stringify({ pseudo_name: pName })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    window.location.reload();
+                } else if (data.error) {
+                    alert(data.error);
+                    btn.disabled = false;
+                    btn.textContent = 'Join Chat';
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                btn.disabled = false;
+                btn.textContent = 'Join Chat';
+            });
+        };
+        @endif
     </script>
 </body>
 </html>

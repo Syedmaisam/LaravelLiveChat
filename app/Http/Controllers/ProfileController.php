@@ -10,6 +10,7 @@ class ProfileController extends Controller
     public function edit()
     {
         $user = Auth::user();
+
         return view('dashboard.settings.profile', compact('user'));
     }
 
@@ -25,7 +26,7 @@ class ProfileController extends Controller
         ]);
 
         // Filter out empty pseudo names
-        $pseudoNames = array_filter($validated['pseudo_names'] ?? [], fn($name) => !empty(trim($name)));
+        $pseudoNames = array_filter($validated['pseudo_names'] ?? [], fn ($name) => ! empty(trim($name)));
 
         $user->update([
             'name' => $validated['name'],
@@ -34,5 +35,30 @@ class ProfileController extends Controller
         ]);
 
         return back()->with('success', 'Profile updated successfully.');
+    }
+
+    public function addNickname(Request $request): \Illuminate\Http\JsonResponse
+    {
+        $validated = $request->validate([
+            'nickname' => 'required|string|max:100',
+            'set_active' => 'boolean',
+        ]);
+
+        $user = Auth::user();
+        $pseudoNames = $user->pseudo_names ?? [];
+
+        if (! in_array($validated['nickname'], $pseudoNames)) {
+            $pseudoNames[] = $validated['nickname'];
+        }
+
+        $updateData = ['pseudo_names' => array_values($pseudoNames)];
+
+        if ($request->boolean('set_active')) {
+            $updateData['active_pseudo_name'] = $validated['nickname'];
+        }
+
+        $user->update($updateData);
+
+        return response()->json(['success' => true, 'nickname' => $validated['nickname']]);
     }
 }

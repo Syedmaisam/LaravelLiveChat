@@ -50,24 +50,24 @@ Route::middleware('auth')->group(function () {
     Route::post('/dashboard/chat/{chat}/label', [\App\Http\Controllers\Dashboard\ChatController::class, 'updateLabel'])->name('dashboard.chat.label');
     Route::get('/dashboard/chat/{chat}/messages', [\App\Http\Controllers\Dashboard\ChatController::class, 'getMessages'])->name('dashboard.chat.messages');
     Route::post('/dashboard/chat/{chat}/read', [DashboardController::class, 'markAsRead'])->name('dashboard.chat.read');
-    
+
     // Visitor actions
     Route::post('/dashboard/visitors/{session}/mark-offline', [DashboardController::class, 'markVisitorOffline'])->name('dashboard.visitor.mark-offline');
     Route::get('/dashboard/chat/{chat}/file/{message}/download', [\App\Http\Controllers\Dashboard\ChatController::class, 'downloadFile'])->name('dashboard.chat.file.download');
     Route::get('/dashboard/message/{message}/download', [\App\Http\Controllers\Dashboard\ChatController::class, 'downloadFile'])->name('dashboard.message.download');
-    
+
     // Chat Notes
     Route::post('/dashboard/chat/{chat}/notes', [\App\Http\Controllers\Dashboard\ChatController::class, 'addNote'])->name('dashboard.chat.notes.store');
     Route::put('/dashboard/chat/{chat}/notes/{note}', [\App\Http\Controllers\Dashboard\ChatController::class, 'updateNote'])->name('dashboard.chat.notes.update');
     Route::delete('/dashboard/chat/{chat}/notes/{note}', [\App\Http\Controllers\Dashboard\ChatController::class, 'deleteNote'])->name('dashboard.chat.notes.destroy');
     Route::post('/dashboard/chat/{chat}/notes/{note}/pin', [\App\Http\Controllers\Dashboard\ChatController::class, 'togglePinNote'])->name('dashboard.chat.notes.pin');
-    
+
     // Proactive Messages (Agent-initiated)
     Route::post('/dashboard/visitor/{visitor}/proactive', [\App\Http\Controllers\Dashboard\ChatController::class, 'sendProactiveMessage'])->name('dashboard.visitor.proactive');
-    
+
     // Reporting
     Route::get('/dashboard/reporting', [\App\Http\Controllers\ReportingController::class, 'index'])->name('dashboard.reporting');
-    
+
     // Canned Responses
     Route::get('/dashboard/canned-responses', [\App\Http\Controllers\Dashboard\CannedResponseController::class, 'index'])->name('dashboard.canned-responses.index');
     Route::post('/dashboard/canned-responses', [\App\Http\Controllers\Dashboard\CannedResponseController::class, 'store'])->name('dashboard.canned-responses.store');
@@ -75,7 +75,7 @@ Route::middleware('auth')->group(function () {
     Route::delete('/dashboard/canned-responses/{cannedResponse}', [\App\Http\Controllers\Dashboard\CannedResponseController::class, 'destroy'])->name('dashboard.canned-responses.destroy');
     Route::get('/api/canned-responses/search', [\App\Http\Controllers\Dashboard\CannedResponseController::class, 'search'])->name('api.canned-responses.search');
     Route::post('/api/canned-responses/{cannedResponse}/use', [\App\Http\Controllers\Dashboard\CannedResponseController::class, 'use'])->name('api.canned-responses.use');
-    
+
     // Admin Routes
     Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('/', [\App\Http\Controllers\Admin\DashboardController::class, 'index'])->name('dashboard');
@@ -83,11 +83,11 @@ Route::middleware('auth')->group(function () {
         Route::resource('roles', \App\Http\Controllers\Admin\RoleController::class);
         Route::resource('permissions', \App\Http\Controllers\Admin\PermissionController::class);
         Route::resource('clients', \App\Http\Controllers\Admin\ClientController::class);
-        
+
         // Visitors
         Route::get('/visitors', [\App\Http\Controllers\Admin\VisitorController::class, 'index'])->name('visitors.index');
         Route::get('/visitors/{session}', [\App\Http\Controllers\Admin\VisitorController::class, 'show'])->name('visitors.show');
-        
+
         // Auto-greetings
         Route::get('/auto-greetings', [\App\Http\Controllers\Admin\AutoGreetingController::class, 'index'])->name('auto-greetings.index');
         Route::post('/auto-greetings', [\App\Http\Controllers\Admin\AutoGreetingController::class, 'store'])->name('auto-greetings.store');
@@ -99,6 +99,7 @@ Route::middleware('auth')->group(function () {
     // Profile Settings
     Route::get('/profile', [\App\Http\Controllers\ProfileController::class, 'edit'])->name('profile.edit');
     Route::put('/profile', [\App\Http\Controllers\ProfileController::class, 'update'])->name('profile.update');
+    Route::post('/profile/nickname', [\App\Http\Controllers\ProfileController::class, 'addNickname'])->name('profile.add.nickname');
 
     // Client management
     Route::resource('clients', ClientController::class);
