@@ -1,11 +1,78 @@
 {{-- Shared notification + ringtone system — included in all layouts and inbox --}}
 <script src="https://js.pusher.com/8.2.0/pusher.min.js"></script>
 <style>
-    #vt-banner { display:none; position:fixed; top:0; left:0; right:0; z-index:9998; background:rgba(34,197,94,0.15); border-bottom:2px solid rgba(34,197,94,0.5); padding:0.75rem 1rem; }
-    #vt-banner.active { display:block; }
-    #vt-banner.left { background:rgba(107,114,128,0.15); border-bottom-color:rgba(107,114,128,0.4); }
-    #vt-toast-container { position:fixed; top:1rem; right:1rem; z-index:9999; display:flex; flex-direction:column; gap:0.75rem; pointer-events:none; max-width:380px; }
-    @keyframes vt-ping { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(1.5)} }
+    #vt-banner {
+        display: none;
+        position: fixed;
+        top: 0; left: 0; right: 0;
+        z-index: 99999;
+        background: linear-gradient(135deg, rgba(34,197,94,0.25) 0%, rgba(16,185,129,0.2) 100%);
+        border-bottom: 2px solid rgba(34,197,94,0.6);
+        padding: 0.875rem 1.25rem;
+        box-shadow: 0 4px 24px rgba(34,197,94,0.15);
+    }
+    #vt-banner.active { display: block; }
+    #vt-banner.left {
+        background: rgba(107,114,128,0.15);
+        border-bottom-color: rgba(107,114,128,0.4);
+        box-shadow: none;
+    }
+    #vt-banner-inner {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.875rem;
+        max-width: 960px;
+        margin: 0 auto;
+        cursor: pointer;
+    }
+    #vt-banner-pulse {
+        position: relative;
+        display: inline-flex;
+        width: 12px;
+        height: 12px;
+        flex-shrink: 0;
+    }
+    #vt-banner-pulse::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        border-radius: 50%;
+        background: #22c55e;
+        animation: vt-ripple 1.2s ease-out infinite;
+    }
+    #vt-banner-pulse::after {
+        content: '';
+        position: absolute;
+        inset: 2px;
+        border-radius: 50%;
+        background: #4ade80;
+    }
+    #vt-banner-text {
+        font-weight: 600;
+        font-size: 0.9rem;
+        font-family: Inter, sans-serif;
+        color: #4ade80;
+        flex: 1;
+        text-align: center;
+        letter-spacing: 0.01em;
+    }
+    #vt-banner-cta {
+        background: rgba(34,197,94,0.2);
+        border: 1px solid rgba(34,197,94,0.5);
+        color: #4ade80;
+        font-size: 0.8rem;
+        font-weight: 600;
+        padding: 0.3rem 0.875rem;
+        border-radius: 999px;
+        cursor: pointer;
+        font-family: Inter, sans-serif;
+        white-space: nowrap;
+        transition: background 0.15s;
+    }
+    #vt-banner-cta:hover { background: rgba(34,197,94,0.35); }
+    #vt-toast-container { position:fixed; top:1rem; right:1rem; z-index:99998; display:flex; flex-direction:column; gap:0.75rem; pointer-events:none; max-width:380px; }
+    @keyframes vt-ripple { 0% { transform:scale(1); opacity:1; } 100% { transform:scale(2.5); opacity:0; } }
     @keyframes vt-slidein { from{transform:translateX(110%);opacity:0} to{transform:translateX(0);opacity:1} }
     @keyframes vt-slideout { from{transform:translateX(0);opacity:1} to{transform:translateX(110%);opacity:0} }
     .vt-tin { animation:vt-slidein 0.35s ease-out forwards; }
@@ -13,11 +80,11 @@
 </style>
 
 {{-- Banner --}}
-<div id="vt-banner">
-    <div style="display:flex;align-items:center;justify-content:center;gap:0.75rem;position:relative;max-width:900px;margin:0 auto;">
-        <span id="vt-banner-dot" style="display:inline-flex;width:10px;height:10px;border-radius:50%;background:#22c55e;animation:vt-ping 1s infinite;flex-shrink:0;"></span>
-        <span id="vt-banner-text" style="font-weight:500;font-size:0.875rem;font-family:Inter,sans-serif;flex:1;text-align:center;color:#4ade80;cursor:pointer;" onclick="vtBannerClick();">New visitor waiting — click to answer</span>
-        <button onclick="vtDismiss();" style="position:absolute;right:0;background:none;border:none;cursor:pointer;color:#4ade80;font-size:1.2rem;line-height:1;padding:0 0.25rem;" id="vt-banner-close">✕</button>
+<div id="vt-banner" onclick="vtBannerClick();">
+    <div id="vt-banner-inner">
+        <span id="vt-banner-pulse"></span>
+        <span id="vt-banner-text">New visitor waiting — click to answer</span>
+        <button id="vt-banner-cta" onclick="event.stopPropagation(); vtBannerClick();">Join Chat →</button>
     </div>
 </div>
 
@@ -39,12 +106,29 @@
     var _audioUnlocked = false;
     var _wantRing = false;
 
+    // Probe autoplay by attempting a silent play on a tiny blank audio element.
+    // We do NOT use the real ringtone — that way Bluetooth/AirPods connecting
+    // cannot accidentally start the ringtone file.
+    (function _probeAutoplay() {
+        var silent = new Audio('data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAA' +
+            'EAAQAAwF0AAIC7AAACABAAZGF0YQAAAAA=');
+        silent.volume = 0;
+        var p = silent.play();
+        if (p) {
+            p.then(function () {
+                _audioUnlocked = true;
+                silent.pause();
+            }).catch(function () {
+                // Autoplay blocked — will unlock via interaction listeners
+            });
+        }
+    }());
+
     function _unlockAudio() {
         if (_audioUnlocked) return;
         _audioUnlocked = true;
         var prompt = document.getElementById('vt-sound-prompt');
         if (prompt) prompt.remove();
-        // If ringing was requested while locked, start now
         if (_wantRing) {
             _audio.currentTime = 0;
             _audio.play().catch(function () {});
@@ -52,12 +136,13 @@
     }
     document.addEventListener('click', _unlockAudio, { passive: true });
     document.addEventListener('keydown', _unlockAudio, { passive: true });
+    document.addEventListener('touchstart', _unlockAudio, { passive: true });
 
     function _startAudio() {
         _wantRing = true;
         if (!_audioUnlocked) {
             _showSoundPrompt();
-            return; // _unlockAudio will call play() when the user next interacts
+            return; // _unlockAudio fires on next interaction and calls play()
         }
         if (_audio.paused) {
             _audio.currentTime = 0;
@@ -87,12 +172,10 @@
     // This avoids the two-tier system confusion entirely.
     var _rings = {}; // ringKey → { uuid: string|null, label: string }
 
-    // Dismissed chat IDs this tab session (sessionStorage)
-    var _dismissed = new Set(JSON.parse(sessionStorage.getItem('vt_dismissed') || '[]'));
+    // Dismissed chat IDs — cleared on every page load since vtDismiss is removed.
+    var _dismissed = new Set();
 
-    function _saveDismissed() {
-        sessionStorage.setItem('vt_dismissed', JSON.stringify([..._dismissed]));
-    }
+    function _saveDismissed() { /* no-op — dismiss removed */ }
 
     // chatId → Pusher channel (for chat.closed per-chat events)
     var _chatChannels = {};
@@ -167,8 +250,8 @@
     function _updateBanner() {
         var banner = document.getElementById('vt-banner');
         var text = document.getElementById('vt-banner-text');
-        var dot = document.getElementById('vt-banner-dot');
-        var closeBtn = document.getElementById('vt-banner-close');
+        var cta = document.getElementById('vt-banner-cta');
+        var pulse = document.getElementById('vt-banner-pulse');
         if (!banner || !text) return;
 
         var count = _ringCount();
@@ -179,39 +262,35 @@
 
         banner.classList.add('active');
         banner.classList.remove('left');
-        if (dot) { dot.style.background = '#22c55e'; dot.style.display = 'inline-flex'; }
-        if (closeBtn) { closeBtn.style.color = '#4ade80'; closeBtn.style.display = ''; }
+        banner.style.cursor = 'pointer';
+        if (pulse) { pulse.style.display = 'inline-flex'; }
+        if (cta) { cta.style.display = ''; cta.textContent = 'Join Chat →'; }
         text.style.color = '#4ade80';
-        text.style.cursor = 'pointer';
-
-        // Find first chat ring to navigate to
-        var firstChatKey = null;
-        Object.keys(_rings).forEach(function (k) {
-            if (!firstChatKey && k.startsWith('c:')) firstChatKey = k;
-        });
 
         if (count === 1) {
-            text.textContent = 'New visitor waiting — click to answer';
+            text.textContent = '🔔 New visitor waiting — click to answer';
         } else {
-            text.textContent = count + ' visitors waiting — click to answer';
+            text.textContent = '🔔 ' + count + ' visitors waiting — click to answer';
         }
     }
 
     function _showVisitorLeft() {
         var banner = document.getElementById('vt-banner');
         var text = document.getElementById('vt-banner-text');
-        var dot = document.getElementById('vt-banner-dot');
-        var closeBtn = document.getElementById('vt-banner-close');
+        var cta = document.getElementById('vt-banner-cta');
+        var pulse = document.getElementById('vt-banner-pulse');
         if (!banner || !text) return;
         banner.classList.add('active', 'left');
+        banner.style.cursor = 'default';
+        banner.onclick = null;
         text.style.color = '#9ca3af';
-        text.style.cursor = 'default';
         text.textContent = 'Visitor left the website';
-        if (dot) dot.style.display = 'none';
-        if (closeBtn) closeBtn.style.display = 'none';
+        if (pulse) pulse.style.display = 'none';
+        if (cta) cta.style.display = 'none';
         clearTimeout(window._vtLeftTimer);
         window._vtLeftTimer = setTimeout(function () {
             banner.classList.remove('active', 'left');
+            banner.onclick = vtBannerClick;
         }, 4000);
     }
 
@@ -219,9 +298,16 @@
         if (document.getElementById('vt-sound-prompt')) return;
         var el = document.createElement('div');
         el.id = 'vt-sound-prompt';
-        el.style.cssText = 'position:fixed;bottom:1.25rem;right:1.25rem;z-index:9999;background:#1a1a1a;border:1px solid #fe9e00;border-radius:0.75rem;padding:0.75rem 1.25rem;font-family:Inter,sans-serif;font-size:0.8rem;color:#fe9e00;cursor:pointer;box-shadow:0 8px 24px rgba(0,0,0,.6);';
-        el.textContent = '🔔 Click anywhere to enable ringtone';
-        el.onclick = function () { el.remove(); };
+        el.style.cssText = 'position:fixed;bottom:1.25rem;right:1.25rem;z-index:100000;background:#111;border:2px solid #fe9e00;border-radius:0.75rem;padding:1rem 1.5rem;font-family:Inter,sans-serif;font-size:0.875rem;color:#fe9e00;cursor:pointer;box-shadow:0 8px 32px rgba(0,0,0,.8);text-align:center;animation:vt-slidein 0.3s ease-out forwards;';
+        el.innerHTML = '<div style="font-weight:700;margin-bottom:0.25rem;">🔔 Click to enable ringtone</div><div style="font-size:0.75rem;color:#9ca3af;">Visitor is waiting for an agent</div>';
+        el.onclick = function () {
+            _unlockAudio();
+            if (_wantRing && _audio.paused) {
+                _audio.currentTime = 0;
+                _audio.play().catch(function () {});
+            }
+            el.remove();
+        };
         document.body.appendChild(el);
     }
 
@@ -251,13 +337,7 @@
         window.location.href = '/live-chat';
     };
 
-    window.vtDismiss = function () {
-        Object.keys(_rings).forEach(function (k) { _dismissed.add(k); });
-        _saveDismissed();
-        Object.keys(_rings).forEach(function (k) { delete _rings[k]; });
-        _stopAudio();
-        _updateBanner();
-    };
+    // vtDismiss intentionally removed — only agent join or visitor leave stops ringing.
 
     // ─── Toast ────────────────────────────────────────────────────────────────
 
@@ -293,6 +373,7 @@
     });
 
     window.vtPusher = vtPusher;
+    window.reverbClient = vtPusher; // alias for legacy admin/visitor pages
     var monitoringChannel = vtPusher.subscribe('monitoring');
     window.vtMonitoringChannel = monitoringChannel;
 
@@ -302,12 +383,6 @@
 
     (function () {
         var waiting = @json(($waitingChats ?? collect())->map(fn($c) => ['id' => $c->id, 'uuid' => $c->uuid, 'session_id' => $c->visitor_session_id])->values());
-
-        // Prune dismissed keys that are no longer relevant
-        var validKeys = new Set();
-        waiting.forEach(function (c) { validKeys.add('c:' + c.id); });
-        _dismissed = new Set([..._dismissed].filter(function (k) { return validKeys.has(k); }));
-        _saveDismissed();
 
         waiting.forEach(function (c) {
             if (c.session_id) {
@@ -410,6 +485,19 @@
     if ('Notification' in window && Notification.permission === 'default') {
         Notification.requestPermission();
     }
+
+    // ─── Per-agent private channel ────────────────────────────────────────────
+    // Subscribe to private-agent.{userId} for direct agent notifications (e.g. new message alerts).
+    // This replaces the equivalent subscription that was in admin.blade.php / dashboard.blade.php.
+    @auth
+    (function () {
+        var agentChannel = vtPusher.subscribe('private-agent.{{ Auth::id() }}');
+        agentChannel.bind('agent.notification', function (data) {
+            _toast(data.title || 'Notification', data.body || '', '🔔',
+                data.url ? function () { window.location.href = data.url; } : null, 8000);
+        });
+    }());
+    @endauth
 
     // Also expose vtStartRinging / vtStopRinging for any legacy callers
     window.vtStartRinging = function (chatId) { _addRing('c:' + chatId, null, 'Chat #' + chatId); };

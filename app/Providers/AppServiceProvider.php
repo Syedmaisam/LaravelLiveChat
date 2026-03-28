@@ -24,7 +24,7 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         // Share nav badge counts with the dashboard layout
-        View::composer(['layouts.dashboard', 'layouts.admin'], function ($view) {
+        View::composer(['layouts.dashboard', 'layouts.admin', 'dashboard.inbox'], function ($view) {
             if (Auth::check()) {
                 $user = Auth::user();
                 $clientIds = $user->clients()->pluck('clients.id');
