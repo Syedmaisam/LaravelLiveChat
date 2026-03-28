@@ -324,17 +324,26 @@
             window.location.href = '/inbox/' + (ring.uuid || firstChatKey.replace('c:', ''));
             return;
         }
-        // Visitor joined but no chat yet — go to live-chat list
+        // Visitor browsing but no chat yet — POST to initiate chat (same as inbox join)
         var firstSessionKey = null;
         Object.keys(_rings).forEach(function (k) {
             if (!firstSessionKey && k.startsWith('s:')) firstSessionKey = k;
         });
         if (firstSessionKey) {
             var sid = firstSessionKey.replace('s:', '');
-            window.location.href = '/inbox/session/' + sid;
+            var form = document.createElement('form');
+            form.method = 'POST';
+            form.action = '/inbox/session/' + sid;
+            var csrf = document.createElement('input');
+            csrf.type = 'hidden';
+            csrf.name = '_token';
+            csrf.value = (document.querySelector('meta[name="csrf-token"]') || {}).content || '';
+            form.appendChild(csrf);
+            document.body.appendChild(form);
+            form.submit();
             return;
         }
-        window.location.href = '/live-chat';
+        window.location.href = '/inbox';
     };
 
     // vtDismiss intentionally removed — only agent join or visitor leave stops ringing.
