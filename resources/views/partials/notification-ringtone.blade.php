@@ -418,8 +418,6 @@
             _addRing('s:' + sid, null, name);
         }
 
-        _toast('New Visitor 🔔', 'New visitor from ' + (country || 'Unknown'), name.substring(0, 2).toUpperCase(),
-            sid ? function () { window.location.href = '/inbox/session/' + sid; } : null);
 
         if ('Notification' in window && Notification.permission === 'granted') {
             new Notification('New Visitor', { body: name + (country ? ' from ' + country : ''), icon: '/favicon.ico', tag: 'vj-' + (sid || Date.now()), silent: true });
@@ -481,8 +479,7 @@
             var sKey = 's:' + data.session_id;
             if (!_rings[sKey]) {
                 _addRing(sKey, null, 'Visitor');
-                _toast('New Visitor 🔔', 'A visitor is on your site', '👤', null);
-            }
+                }
             return;
         }
 
