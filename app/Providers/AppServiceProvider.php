@@ -53,13 +53,25 @@ class AppServiceProvider extends ServiceProvider
                     })
                     ->get(['id', 'uuid', 'visitor_session_id']);
 
+                // Online sessions with no waiting/active chat — visitor is browsing but hasn't messaged yet
+                $waitingSessionIds = $waitingChats->pluck('visitor_session_id');
+                $onlineSessions = VisitorSession::whereIn('client_id', $clientIds)
+                    ->where('is_online', true)
+                    ->whereNotIn('id', $waitingSessionIds)
+                    ->whereDoesntHave('chats', function ($q) {
+                        $q->whereIn('status', ['waiting', 'active']);
+                    })
+                    ->get(['id']);
+
                 $view->with('navVisitorCount', $navVisitorCount);
                 $view->with('navUnreadChatCount', $navUnreadChatCount);
                 $view->with('waitingChats', $waitingChats);
+                $view->with('onlineSessions', $onlineSessions);
             } else {
                 $view->with('navVisitorCount', 0);
                 $view->with('navUnreadChatCount', 0);
                 $view->with('waitingChats', collect());
+                $view->with('onlineSessions', collect());
             }
         });
     }

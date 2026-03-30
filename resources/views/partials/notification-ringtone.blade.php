@@ -324,17 +324,26 @@
             window.location.href = '/inbox/' + (ring.uuid || firstChatKey.replace('c:', ''));
             return;
         }
-        // Visitor joined but no chat yet — go to live-chat list
+        // Visitor browsing but no chat yet — POST to initiate chat (same as inbox join)
         var firstSessionKey = null;
         Object.keys(_rings).forEach(function (k) {
             if (!firstSessionKey && k.startsWith('s:')) firstSessionKey = k;
         });
         if (firstSessionKey) {
             var sid = firstSessionKey.replace('s:', '');
-            window.location.href = '/inbox/session/' + sid;
+            var form = document.createElement('form');
+            form.method = 'POST';
+            form.action = '/inbox/session/' + sid;
+            var csrf = document.createElement('input');
+            csrf.type = 'hidden';
+            csrf.name = '_token';
+            csrf.value = (document.querySelector('meta[name="csrf-token"]') || {}).content || '';
+            form.appendChild(csrf);
+            document.body.appendChild(form);
+            form.submit();
             return;
         }
-        window.location.href = '/live-chat';
+        window.location.href = '/inbox';
     };
 
     // vtDismiss intentionally removed — only agent join or visitor leave stops ringing.
@@ -383,6 +392,7 @@
 
     (function () {
         var waiting = @json(($waitingChats ?? collect())->map(fn($c) => ['id' => $c->id, 'uuid' => $c->uuid, 'session_id' => $c->visitor_session_id])->values());
+        var onlineSessions = @json(($onlineSessions ?? collect())->pluck('id')->values());
 
         waiting.forEach(function (c) {
             if (c.session_id) {
@@ -393,6 +403,14 @@
             if (!_dismissed.has(key)) {
                 _addRing(key, c.uuid, 'Chat #' + c.id);
                 _subscribeChatChannel(c.id);
+            }
+        });
+
+        // Ring for online visitors who haven't started a chat yet
+        onlineSessions.forEach(function (sid) {
+            var key = 's:' + sid;
+            if (!_dismissed.has(key)) {
+                _addRing(key, null, 'Visitor');
             }
         });
     }());
@@ -409,8 +427,6 @@
             _addRing('s:' + sid, null, name);
         }
 
-        _toast('New Visitor 🔔', 'New visitor from ' + (country || 'Unknown'), name.substring(0, 2).toUpperCase(),
-            sid ? function () { window.location.href = '/inbox/session/' + sid; } : null);
 
         if ('Notification' in window && Notification.permission === 'granted') {
             new Notification('New Visitor', { body: name + (country ? ' from ' + country : ''), icon: '/favicon.ico', tag: 'vj-' + (sid || Date.now()), silent: true });
@@ -464,7 +480,17 @@
 
     // Visitor closed their browser tab / window
     monitoringChannel.bind('status.changed', function (data) {
-        if (data.is_online || !data.session_id) return;
+        if (!data.session_id) return;
+
+        // Visitor came online — ring if not already ringing for this session.
+        // Covers returning visitors who skip visitor.joined.
+        if (data.is_online) {
+            var sKey = 's:' + data.session_id;
+            if (!_rings[sKey]) {
+                _addRing(sKey, null, 'Visitor');
+                }
+            return;
+        }
 
         var sid = data.session_id;
         var hadSessionRing = !!_rings['s:' + sid];
