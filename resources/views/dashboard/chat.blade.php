@@ -321,14 +321,15 @@
 
     <script>
         // Initialize Pusher/Reverb
+        const reverbScheme = '{{ config('broadcasting.connections.reverb.options.scheme', 'http') }}';
+        const reverbPort = {{ config('broadcasting.connections.reverb.options.port', 8080) }};
         const pusher = new Pusher('{{ config('reverb.apps.apps.0.key') }}', {
             wsHost: '{{ config('broadcasting.connections.reverb.options.host', '127.0.0.1') }}',
-            wsPort: {{ config('broadcasting.connections.reverb.options.port', 8080) }},
-            wssPort: {{ config('broadcasting.connections.reverb.options.port', 8080) }},
-            forceTLS: false,
-            enabledTransports: ['ws', 'wss'],
+            wsPort: reverbScheme === 'https' ? 443 : reverbPort,
+            wssPort: reverbScheme === 'https' ? 443 : reverbPort,
+            forceTLS: reverbScheme === 'https',
+            enabledTransports: reverbScheme === 'https' ? ['wss'] : ['ws', 'wss'],
             disableStats: true,
-            cluster: 'mt1',
             authEndpoint: '/broadcasting/auth',
             auth: {
                 headers: {

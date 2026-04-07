@@ -1,4 +1,4 @@
-(function() {
+(function () {
     'use strict';
 
     // Configuration
@@ -39,7 +39,7 @@
         unreadCount: 0,
         originalTitle: document.title, // Store original title for tab badge
     };
-    
+
     // Get list of commonly used emojis
     function getEmojiList() {
         return [
@@ -55,7 +55,7 @@
             return;
         }
         const script = document.createElement('script');
-        script.src = 'https://js.pusher.com/8.2.0/pusher.min.js';
+        script.src = config.apiUrl.replace('/api', '') + '/pusher.min.js';
         script.onload = callback;
         script.onerror = () => console.error('Failed to load Pusher library');
         document.head.appendChild(script);
@@ -74,7 +74,7 @@
                 config.wsHost = data.ws_host || '127.0.0.1';
                 config.wsPort = data.ws_port || 8080;
                 config.wsScheme = data.ws_scheme || 'http';
-                
+
                 // Load client widget settings
                 config.widgetColor = data.widget_color || '#fe9e00';
                 config.widgetIcon = data.widget_icon || 'chat';
@@ -116,7 +116,7 @@
                     // Subscribe to visitor channel for proactive messages
                     subscribeToVisitorChannel();
                 });
-                
+
                 // Auto-open widget after delay
                 if (config.autoOpen) {
                     setTimeout(() => {
@@ -143,7 +143,7 @@
     function createWidget() {
         // Determine icon SVG based on widget_icon setting
         const iconSvg = getIconSvg(config.widgetIcon);
-        
+
         const widget = document.createElement('div');
         widget.id = 'live-chat-widget';
         widget.className = config.widgetPosition === 'bottom-left' ? 'position-left' : '';
@@ -764,17 +764,17 @@
                 referrer_url: document.referrer,
             }),
         })
-        .then(res => res.json())
-        .then(data => {
-            config.sessionKey = data.session_key;
-            if (data.visitor_key) {
-                config.visitorKey = data.visitor_key;
-                setCookie('live_chat_visitor_key', config.visitorKey, 365);
-            }
-            // Start heartbeat after session is established
-            startHeartbeat();
-        })
-        .catch(err => console.error('Tracking error:', err));
+            .then(res => res.json())
+            .then(data => {
+                config.sessionKey = data.session_key;
+                if (data.visitor_key) {
+                    config.visitorKey = data.visitor_key;
+                    setCookie('live_chat_visitor_key', config.visitorKey, 365);
+                }
+                // Start heartbeat after session is established
+                startHeartbeat();
+            })
+            .catch(err => console.error('Tracking error:', err));
     }
 
     // Track page changes
@@ -792,7 +792,7 @@
     function checkExistingChat() {
         if (!config.widgetKey || !config.visitorKey) return;
         if (state.chatId) return; // Already have a chat
-        
+
         fetch(`${config.apiUrl}/chat/check-existing?widget_key=${config.widgetKey}&visitor_key=${config.visitorKey}`)
             .then(res => res.json())
             .then(data => {
@@ -800,19 +800,19 @@
                     console.log('Found existing agent-initiated chat:', data.chat_id);
                     state.chatId = data.chat_id;
                     state.messages = data.messages || [];
-                    
+
                     // Save to localStorage
                     localStorage.setItem('live_chat_chat_id', data.chat_id);
                     localStorage.setItem('live_chat_session_timestamp', Date.now().toString());
-                    
+
                     // Subscribe to chat channel for real-time updates
                     initChatWebSocket();
-                    
+
                     // Show unread badge and toast if there are unread agent messages
                     const unreadAgentMessages = state.messages.filter(m => m.sender_type === 'agent' && !m.is_read);
                     if (unreadAgentMessages.length > 0) {
                         showUnreadBadge(unreadAgentMessages.length);
-                        
+
                         // Show toast with the latest agent message
                         const latestMessage = unreadAgentMessages[unreadAgentMessages.length - 1];
                         showToastNotification(
@@ -835,7 +835,7 @@
     // Start heartbeat to keep session alive
     function startHeartbeat() {
         if (!config.sessionKey) return;
-        
+
         // Send heartbeat every 30 seconds
         state.heartbeatInterval = setInterval(() => {
             fetch(`${config.apiUrl}/visitor/heartbeat`, {
@@ -868,9 +868,9 @@
     // Send offline signal using beacon API (reliable on page unload)
     function sendOfflineSignal() {
         if (!config.sessionKey) return;
-        
+
         const data = JSON.stringify({ session_key: config.sessionKey });
-        
+
         // Use sendBeacon for reliable delivery on page unload
         if (navigator.sendBeacon) {
             const blob = new Blob([data], { type: 'application/json' });
@@ -887,50 +887,50 @@
     // Attach event listeners
     function attachEventListeners() {
         document.getElementById('details-form')?.addEventListener('submit', handleDetailsFormSubmit);
-        
+
         const messageInput = document.getElementById('message-input');
         messageInput?.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
                 window.LiveChatWidget.sendMessage();
             }
         });
-        
+
         // Send typing indicator with debounce
         let typingTimeout = null;
         messageInput?.addEventListener('input', () => {
             if (!state.chatId || !config.visitorKey) return;
-            
+
             // Clear previous timeout
             if (typingTimeout) clearTimeout(typingTimeout);
-            
+
             // Send typing indicator
             fetch(`${config.apiUrl}/chat/${state.chatId}/typing`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ visitor_key: config.visitorKey }),
-            }).catch(() => {}); // Ignore errors
-            
+            }).catch(() => { }); // Ignore errors
+
             // Don't send again for 2 seconds
             typingTimeout = setTimeout(() => {
                 typingTimeout = null;
             }, 2000);
         });
-        
+
         document.getElementById('file-upload-btn')?.addEventListener('click', () => {
             document.getElementById('file-input')?.click();
         });
         document.getElementById('file-input')?.addEventListener('change', handleFileUpload);
-        
+
         // Emoji picker event listeners
         const emojiPickerBtn = document.getElementById('emoji-picker-btn');
         const emojiPicker = document.getElementById('emoji-picker');
-        
+
         emojiPickerBtn?.addEventListener('click', (e) => {
             e.stopPropagation();
             const isVisible = emojiPicker.style.display !== 'none';
             emojiPicker.style.display = isVisible ? 'none' : 'block';
         });
-        
+
         // Insert emoji on click
         document.querySelectorAll('.emoji-item').forEach(item => {
             item.addEventListener('click', () => {
@@ -947,7 +947,7 @@
                 emojiPicker.style.display = 'none';
             });
         });
-        
+
         // Close picker when clicking outside
         document.addEventListener('click', (e) => {
             if (emojiPicker && !emojiPicker.contains(e.target) && e.target !== emojiPickerBtn) {
@@ -969,16 +969,16 @@
     // Handle details form submission (shown on first message)
     function handleDetailsFormSubmit(e) {
         e.preventDefault();
-        
+
         if (state.isSubmitting) return;
         state.isSubmitting = true;
-        
+
         const formData = new FormData(e.target);
         const pendingMessage = formData.get('pending_message');
         const name = formData.get('name');
         const email = formData.get('email');
         const phone = formData.get('phone');
-        
+
         // Disable button
         const btn = e.target.querySelector('button[type="submit"]');
         if (btn) btn.disabled = true;
@@ -1002,24 +1002,24 @@
                 message: pendingMessage, // Include the pending message
             }),
         })
-        .then(res => res.json())
-        .then(data => {
-            state.chatId = data.chat_id;
-            // Save chat ID and timestamp to localStorage so we can resume
-            localStorage.setItem('live_chat_chat_id', data.chat_id);
-            localStorage.setItem('live_chat_session_timestamp', Date.now().toString());
-            // Hide form, show messages
-            document.getElementById('live-chat-details-form').style.display = 'none';
-            document.getElementById('live-chat-messages').style.display = 'block';
-            document.getElementById('live-chat-footer').style.display = 'flex';
-            loadMessages();
-            initChatWebSocket();
-        })
-        .catch(err => console.error('Chat creation error:', err))
-        .finally(() => {
-            state.isSubmitting = false;
-            if (btn) btn.disabled = false;
-        });
+            .then(res => res.json())
+            .then(data => {
+                state.chatId = data.chat_id;
+                // Save chat ID and timestamp to localStorage so we can resume
+                localStorage.setItem('live_chat_chat_id', data.chat_id);
+                localStorage.setItem('live_chat_session_timestamp', Date.now().toString());
+                // Hide form, show messages
+                document.getElementById('live-chat-details-form').style.display = 'none';
+                document.getElementById('live-chat-messages').style.display = 'block';
+                document.getElementById('live-chat-footer').style.display = 'flex';
+                loadMessages();
+                initChatWebSocket();
+            })
+            .catch(err => console.error('Chat creation error:', err))
+            .finally(() => {
+                state.isSubmitting = false;
+                if (btn) btn.disabled = false;
+            });
     }
 
     // Load saved visitor details from localStorage
@@ -1028,7 +1028,7 @@
         const savedDetails = localStorage.getItem('live_chat_visitor_details');
         const savedChatId = localStorage.getItem('live_chat_chat_id');
         const savedTimestamp = localStorage.getItem('live_chat_session_timestamp');
-        
+
         // Check if session has expired (24 hours)
         const SESSION_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24 hours
         if (savedTimestamp && (Date.now() - parseInt(savedTimestamp)) > SESSION_EXPIRY_MS) {
@@ -1036,11 +1036,11 @@
             clearSavedSession();
             return;
         }
-        
+
         if (submitted && savedDetails) {
             state.hasSubmittedDetails = true;
             state.visitorDetails = JSON.parse(savedDetails);
-            
+
             if (savedChatId) {
                 state.chatId = savedChatId;
                 // Returning visitor with existing chat - load messages
@@ -1078,7 +1078,7 @@
                 }
             });
     }
-    
+
     // Clear saved session from localStorage
     function clearSavedSession() {
         localStorage.removeItem('live_chat_details_submitted');
@@ -1090,31 +1090,31 @@
     // Render messages
     function renderMessages() {
         const container = document.getElementById('messages-container');
-        
+
         // 1. Capture Scroll State BEFORE update
         // Use a generous threshold (e.g., 150px) to consider "at bottom"
         // If container is empty (scrollHeight == clientHeight), isAtBottom is true
         const threshold = 150;
         const distFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
         const isAtBottom = distFromBottom <= threshold;
-        
 
-        
+
+
         // Safe State Isolation: Merge proactive message if exists
         let messagesToRender = [...state.messages];
         if (state.proactiveMessage) {
-            const exists = messagesToRender.some(m => 
-                m.id === state.proactiveMessage.id || 
+            const exists = messagesToRender.some(m =>
+                m.id === state.proactiveMessage.id ||
                 (m.message === state.proactiveMessage.message && m.sender_type === 'agent')
             );
             if (!exists) {
                 messagesToRender.push(state.proactiveMessage);
             }
         }
-        
+
         // Sort by time
         messagesToRender.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
-        
+
         if (messagesToRender.length === 0) {
             container.innerHTML = `
                 <div class="welcome-message">
@@ -1127,7 +1127,7 @@
                 const isSending = msg._sending;
                 const isFailed = msg._failed;
                 const bubbleStyle = isSending ? 'opacity: 0.7;' : (isFailed ? 'background: #ff4757 !important;' : '');
-                
+
                 // Determine status icon
                 let statusIcon = '';
                 if (msg.sender_type === 'visitor') {
@@ -1141,7 +1141,7 @@
                         statusIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"></path></svg>';
                     }
                 }
-                
+
                 return `
                 <div class="message ${msg.sender_type}">
                     ${msg.sender_type === 'agent' && msg.sender_name ? `
@@ -1150,23 +1150,23 @@
                         </div>
                     ` : ''}
                     <div class="message-bubble" style="${bubbleStyle}">
-                        ${msg.message_type === 'file' ? 
-                            (msg.file_type && msg.file_type.startsWith('image/') ? 
-                                `<img src="${config.apiUrl}/chat/${state.chatId}/file/${msg.id}/download?visitor_key=${config.visitorKey}" 
+                        ${msg.message_type === 'file' ?
+                        (msg.file_type && msg.file_type.startsWith('image/') ?
+                            `<img src="${config.apiUrl}/chat/${state.chatId}/file/${msg.id}/download?visitor_key=${config.visitorKey}" 
                                       alt="${escapeHtml(msg.file_name)}" 
                                       class="max-w-full rounded cursor-pointer" 
                                       onclick="window.open(this.src, '_blank')"
                                       style="max-height: 200px;">
                                  <div class="text-xs mt-1" style="color: ${msg.sender_type === 'visitor' ? '#fff' : '#333'}">${escapeHtml(msg.file_name)}</div>` :
-                                `<a href="${config.apiUrl}/chat/${state.chatId}/file/${msg.id}/download?visitor_key=${config.visitorKey}" 
+                            `<a href="${config.apiUrl}/chat/${state.chatId}/file/${msg.id}/download?visitor_key=${config.visitorKey}" 
                                     download="${escapeHtml(msg.file_name)}"
                                     class="file-download-link"
                                     style="color: ${msg.sender_type === 'visitor' ? '#fff' : '#333'}; text-decoration: underline;">
                                     📎 ${escapeHtml(msg.file_name)}
                                  </a>`
-                            ) :
-                            escapeHtml(msg.message || '')
-                        }
+                        ) :
+                        escapeHtml(msg.message || '')
+                    }
                     </div>
                     ${msg.sender_type === 'visitor' ? `
                         <div class="message-status ${msg.is_read ? 'read' : ''}" id="msg-status-${msg.id}">
@@ -1176,7 +1176,7 @@
                 </div>
             `}).join('');
         }
-        
+
         // Re-append typing indicator only if actively typing
         if (isTypingActive) {
             let indicator = container.querySelector('.typing-indicator');
@@ -1191,26 +1191,26 @@
 
         // 2. Decide Scroll Logic AFTER update (but based on state BEFORE update)
         if (state.forceScroll || isAtBottom) {
-             container.scrollTop = container.scrollHeight;
-             state.forceScroll = false;
-             
-             // Hide badge if we scrolled to bottom
-             const badge = document.getElementById('scroll-badge');
-             if (badge) badge.classList.remove('visible');
+            container.scrollTop = container.scrollHeight;
+            state.forceScroll = false;
+
+            // Hide badge if we scrolled to bottom
+            const badge = document.getElementById('scroll-badge');
+            if (badge) badge.classList.remove('visible');
         } else {
-             // We are NOT scrolling to bottom automaticallly
-             // This means user was scrolled up AND no force scroll request.
-             // If this render was triggered by a new INCOMING message, we should show Badge.
-             // (If it was a re-render for Status Update, we probably don't need badge, but harmless).
-             
-             // Show badge only if we have messages
-             if (messagesToRender.length > 0) {
-                 const badge = document.getElementById('scroll-badge');
-                 if (badge) badge.classList.add('visible');
-             }
+            // We are NOT scrolling to bottom automaticallly
+            // This means user was scrolled up AND no force scroll request.
+            // If this render was triggered by a new INCOMING message, we should show Badge.
+            // (If it was a re-render for Status Update, we probably don't need badge, but harmless).
+
+            // Show badge only if we have messages
+            if (messagesToRender.length > 0) {
+                const badge = document.getElementById('scroll-badge');
+                if (badge) badge.classList.add('visible');
+            }
         }
     }
-    
+
 
 
     // Send message
@@ -1218,10 +1218,10 @@
         const input = document.getElementById('message-input');
         const message = input.value.trim();
         if (!message) return;
-        
+
         // Check if user has submitted details
         const hasDetails = state.hasSubmittedDetails || localStorage.getItem('live_chat_details_submitted') === 'true';
-        
+
         // If no details yet, show the form with pending message
         if (!hasDetails || !state.chatId) {
             document.getElementById('pending-message').value = message;
@@ -1241,7 +1241,7 @@
             _sending: true // Mark as sending for UI state
         };
         state.messages.push(tempMessage);
-        
+
         state.forceScroll = true; // Force scroll for own messages
         renderMessages();
         input.value = '';
@@ -1255,29 +1255,29 @@
                 message: message,
             }),
         })
-        .then(res => res.json())
-        .then(data => {
-            // Update temp message with real data and mark as sent
-            const tempIndex = state.messages.findIndex(m => m.id === tempMessage.id);
-            if (tempIndex !== -1 && data.message) {
-                state.messages[tempIndex] = data.message;
-                renderMessages(); // Re-render to update the status
-            }
-        })
-        .catch(err => {
-            console.error('Send message error:', err);
-            // Mark message as failed instead of removing
-            const tempIndex = state.messages.findIndex(m => m.id === tempMessage.id);
-            if (tempIndex !== -1) {
-                state.messages[tempIndex]._failed = true;
-                state.messages[tempIndex]._sending = false;
-                renderMessages();
-            }
-            // Show error notification
-            showSendErrorToast(message);
-        });
+            .then(res => res.json())
+            .then(data => {
+                // Update temp message with real data and mark as sent
+                const tempIndex = state.messages.findIndex(m => m.id === tempMessage.id);
+                if (tempIndex !== -1 && data.message) {
+                    state.messages[tempIndex] = data.message;
+                    renderMessages(); // Re-render to update the status
+                }
+            })
+            .catch(err => {
+                console.error('Send message error:', err);
+                // Mark message as failed instead of removing
+                const tempIndex = state.messages.findIndex(m => m.id === tempMessage.id);
+                if (tempIndex !== -1) {
+                    state.messages[tempIndex]._failed = true;
+                    state.messages[tempIndex]._sending = false;
+                    renderMessages();
+                }
+                // Show error notification
+                showSendErrorToast(message);
+            });
     }
-    
+
     // Show send error toast with retry option
     function showSendErrorToast(message) {
         const toast = document.createElement('div');
@@ -1304,7 +1304,7 @@
             toast.remove();
         };
         document.body.appendChild(toast);
-        
+
         setTimeout(() => toast.remove(), 5000);
     }
 
@@ -1321,12 +1321,12 @@
             method: 'POST',
             body: formData,
         })
-        .then(res => res.json())
-        .then(data => {
-            state.messages.push(data.message);
-            renderMessages();
-        })
-        .catch(err => console.error('File upload error:', err));
+            .then(res => res.json())
+            .then(data => {
+                state.messages.push(data.message);
+                renderMessages();
+            })
+            .catch(err => console.error('File upload error:', err));
     }
 
     // Initialize chat WebSocket with reconnection logic
@@ -1335,7 +1335,7 @@
         if (!state.wsReconnectAttempts) state.wsReconnectAttempts = 0;
         const maxReconnectAttempts = 5;
         const baseReconnectDelay = 1000; // 1 second
-        
+
         // Try to use Pusher if available
         if (window.Pusher && config.wsKey) {
             try {
@@ -1347,7 +1347,7 @@
                         console.log('Error disconnecting previous Pusher:', e);
                     }
                 }
-                
+
                 const pusher = new Pusher(config.wsKey, {
                     wsHost: config.wsHost || window.location.hostname,
                     wsPort: config.wsScheme === 'https' ? 443 : (config.wsPort || 8080),
@@ -1355,41 +1355,42 @@
                     forceTLS: config.wsScheme === 'https',
                     enabledTransports: config.wsScheme === 'https' ? ['wss'] : ['ws', 'wss'],
                     disableStats: true,
+                    cluster: 'mt1'
                 });
-                
+
                 // Handle connection state changes
-                pusher.connection.bind('connected', function() {
+                pusher.connection.bind('connected', function () {
                     console.log('WebSocket connected for chat', state.chatId);
                     state.wsReconnectAttempts = 0; // Reset on success
                     state.wsConnected = true;
-                    
+
                     // Refresh messages on reconnect to catch any missed
                     if (state.wasDisconnected) {
                         loadMessages();
                         state.wasDisconnected = false;
                     }
                 });
-                
-                pusher.connection.bind('disconnected', function() {
+
+                pusher.connection.bind('disconnected', function () {
                     console.log('WebSocket disconnected, will attempt reconnect...');
                     state.wsConnected = false;
                     state.wasDisconnected = true;
                 });
-                
-                pusher.connection.bind('error', function(error) {
+
+                pusher.connection.bind('error', function (error) {
                     console.log('WebSocket error:', error);
                     state.wsConnected = false;
                 });
-                
-                pusher.connection.bind('unavailable', function() {
+
+                pusher.connection.bind('unavailable', function () {
                     console.log('WebSocket unavailable, scheduling reconnect...');
                     state.wsReconnectAttempts++;
-                    
+
                     if (state.wsReconnectAttempts < maxReconnectAttempts) {
                         // Exponential backoff: 1s, 2s, 4s, 8s, 16s (max 30s)
                         const delay = Math.min(baseReconnectDelay * Math.pow(2, state.wsReconnectAttempts - 1), 30000);
                         console.log(`Reconnect attempt ${state.wsReconnectAttempts} in ${delay}ms`);
-                        
+
                         setTimeout(() => {
                             if (!state.wsConnected && state.chatId) {
                                 initChatWebSocket();
@@ -1404,13 +1405,13 @@
                 // Use public channel (no auth required)
                 const channel = pusher.subscribe(`chat.${state.chatId}`);
 
-                channel.bind('message.sent', function(data) {
+                channel.bind('message.sent', function (data) {
                     // Only add if not our own message (avoid duplicates)
                     // Use loose equality for ID to handle string/int differences
                     if (data.sender_type === 'agent' && !state.messages.find(m => m.id == data.id)) {
                         state.messages.push(data);
                         renderMessages();
-                        
+
                         // Play notification sound for agent messages
                         playNotificationSound();
                         // Show visual indicator if chat window is closed
@@ -1426,11 +1427,11 @@
                     }
                 });
 
-                channel.bind('agent.typing', function(data) {
+                channel.bind('agent.typing', function (data) {
                     showTypingIndicator();
                 });
 
-                channel.bind('chat.closed', function(data) {
+                channel.bind('chat.closed', function (data) {
                     // Show system message
                     state.messages.push({
                         id: 'system-closed',
@@ -1451,7 +1452,7 @@
                     if (sendBtn) sendBtn.disabled = true;
                 });
 
-                channel.bind('messages.read', function(data) {
+                channel.bind('messages.read', function (data) {
                     if (data.reader_type === 'agent') {
                         data.message_ids.forEach(id => {
                             const el = document.getElementById(`msg-status-${id}`);
@@ -1533,32 +1534,32 @@
     function playNotificationSound() {
         try {
             const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-            
+
             // Create a pleasant two-tone notification sound
             const playTone = (freq, startTime, duration) => {
                 const oscillator = audioContext.createOscillator();
                 const gainNode = audioContext.createGain();
-                
+
                 oscillator.connect(gainNode);
                 gainNode.connect(audioContext.destination);
-                
+
                 oscillator.frequency.value = freq;
                 oscillator.type = 'sine';
-                
+
                 // Envelope: quick attack, sustain, quick release
                 gainNode.gain.setValueAtTime(0, audioContext.currentTime + startTime);
                 gainNode.gain.linearRampToValueAtTime(0.15, audioContext.currentTime + startTime + 0.02);
                 gainNode.gain.setValueAtTime(0.15, audioContext.currentTime + startTime + duration - 0.02);
                 gainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime + startTime + duration);
-                
+
                 oscillator.start(audioContext.currentTime + startTime);
                 oscillator.stop(audioContext.currentTime + startTime + duration);
             };
-            
+
             // Play a pleasant "ding-ding" sound (like iMessage)
             playTone(880, 0, 0.12);      // A5
             playTone(1318.5, 0.12, 0.15); // E6 (higher note)
-            
+
         } catch (e) {
             console.log('Could not play notification sound:', e);
         }
@@ -1568,7 +1569,7 @@
     function showUnreadBadge(count = 1) {
         // Increment unread count
         state.unreadCount += count;
-        
+
         const button = document.querySelector('.live-chat-button');
         if (button) {
             // Create or update badge
@@ -1579,7 +1580,7 @@
                 button.style.position = 'relative';
                 button.appendChild(badge);
             }
-            
+
             // Style badge with count
             if (state.unreadCount > 9) {
                 badge.textContent = '9+';
@@ -1592,11 +1593,11 @@
                 badge.style.cssText = 'position:absolute;top:-4px;right:-4px;width:12px;height:12px;background:#ff4757;border-radius:50%;border:2px solid #1a1a1a;';
             }
         }
-        
+
         // Update browser tab title
         updateTabTitle();
     }
-    
+
     // Update browser tab title with unread count
     function updateTabTitle() {
         if (state.unreadCount > 0) {
@@ -1622,11 +1623,11 @@
         if (toast) {
             toast.remove();
         }
-        
+
         // Get display name (use agent name or fallback)
         const displayName = agentName || 'Support Agent';
         const initial = displayName.charAt(0).toUpperCase();
-        
+
         // Create new toast with agent info - bigger and more modern
         toast = document.createElement('div');
         toast.id = 'live-chat-toast';
@@ -1647,7 +1648,7 @@
             border-left: 4px solid ${config.widgetColor};
             transition: transform 0.2s ease, box-shadow 0.2s ease;
         `;
-        
+
         // Add hover effect
         toast.onmouseenter = () => {
             toast.style.transform = 'translateY(-2px)';
@@ -1657,7 +1658,7 @@
             toast.style.transform = 'translateY(0)';
             toast.style.boxShadow = '0 10px 40px rgba(0,0,0,0.2), 0 4px 12px rgba(0,0,0,0.1)';
         };
-        
+
         // Build avatar HTML - bigger avatar
         let avatarHtml;
         if (agentAvatar) {
@@ -1665,7 +1666,7 @@
         } else {
             avatarHtml = `<div style="width: 52px; height: 52px; border-radius: 50%; background: linear-gradient(135deg, ${config.widgetColor} 0%, ${config.widgetColor}cc 100%); color: white; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 20px; box-shadow: 0 2px 8px ${config.widgetColor}40;">${initial}</div>`;
         }
-        
+
         toast.innerHTML = `
             <div style="display: flex; align-items: center; gap: 14px;">
                 <div style="flex-shrink: 0;">
@@ -1678,9 +1679,9 @@
                 <button onclick="event.stopPropagation(); this.closest('#live-chat-toast').remove();" style="flex-shrink: 0; background: #f5f5f5; border: none; color: #666; cursor: pointer; padding: 6px; font-size: 16px; line-height: 1; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; transition: all 0.15s ease;" onmouseenter="this.style.background='#eee';this.style.color='#333'" onmouseleave="this.style.background='#f5f5f5';this.style.color='#666'">&times;</button>
             </div>
         `;
-        
+
         // Click to open widget
-        toast.onclick = function() {
+        toast.onclick = function () {
             window.LiveChatWidget.toggle();
             toast.remove();
         };
@@ -1723,7 +1724,7 @@
     }
 
     function generateUUID() {
-        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
             const r = Math.random() * 16 | 0;
             const v = c === 'x' ? r : (r & 0x3 | 0x8);
             return v.toString(16);
@@ -1735,7 +1736,7 @@
         div.textContent = text;
         return div.innerHTML;
     }
-    
+
     // Get icon SVG based on icon type
     function getIconSvg(iconType) {
         const icons = {
@@ -1746,43 +1747,43 @@
         };
         return icons[iconType] || icons['chat'];
     }
-    
+
     // Subscribe to visitor channel for proactive messages
     function subscribeToVisitorChannel() {
         if (!config.visitorKey || !config.wsKey) {
             console.log('Cannot subscribe to visitor channel - no visitor key or ws key');
             return;
         }
-        
+
         // Create Pusher instance if not already exists
         if (!state.pusher && window.Pusher) {
             state.pusher = new Pusher(config.wsKey, {
                 wsHost: config.wsHost || window.location.hostname,
-                wsPort: config.wsPort || 8080,
-                wssPort: config.wsPort || 8080,
+                wsPort: config.wsScheme === 'https' ? 443 : (config.wsPort || 8080),
+                wssPort: config.wsScheme === 'https' ? 443 : (config.wsPort || 8080),
                 forceTLS: config.wsScheme === 'https',
-                enabledTransports: ['ws', 'wss'],
+                enabledTransports: config.wsScheme === 'https' ? ['wss'] : ['ws', 'wss'],
                 disableStats: true,
-                cluster: 'mt1'
+                cluster: 'mt1',
             });
         }
-        
+
         if (!state.pusher) {
             console.log('Cannot subscribe to visitor channel - Pusher not available');
             return;
         }
-        
+
         const channel = state.pusher.subscribe('visitor.' + config.visitorKey);
-        
-        channel.bind('proactive.message', function(data) {
+
+        channel.bind('proactive.message', function (data) {
             console.log('Received proactive message:', data);
-            
+
             // If we already have an active chat, ignore this event
             // The main 'message.sent' event will handle the message and notifications
             if (state.chatId) {
                 return;
             }
-            
+
             // Push to messages state so it's available when chat opens
             const msgObj = {
                 id: 'proactive-' + Date.now(),
@@ -1791,51 +1792,51 @@
                 sender_name: data.agent_name,
                 created_at: data.timestamp || new Date().toISOString()
             };
-            
+
             // Safe State Isolation: Store in separate state variable
             // This protects the message from being overwritten by server sync logic
             state.proactiveMessage = msgObj;
-            
+
             state.messages.push(msgObj);
-            
+
             // If chat is OPEN, update UI immediately
             if (state.isOpen) {
-               // Hide details form and show messages so visitor sees the agent's message
-               // The form will reappear when they try to reply (handled in sendMessage)
-               const form = document.getElementById('live-chat-details-form');
-               const msgs = document.getElementById('live-chat-messages');
-               const footer = document.getElementById('live-chat-footer');
-               
-               if (form) form.style.display = 'none';
-               if (msgs) {
-                   msgs.style.display = 'block';
-                   renderMessages();
-                   const container = document.getElementById('messages-container');
-                   if (container) container.scrollTop = container.scrollHeight;
-               }
-               if (footer) footer.style.display = 'flex';
-               
-               // Play simple sound but DON'T show toast bubble (duplication)
-               playNotificationSound();
+                // Hide details form and show messages so visitor sees the agent's message
+                // The form will reappear when they try to reply (handled in sendMessage)
+                const form = document.getElementById('live-chat-details-form');
+                const msgs = document.getElementById('live-chat-messages');
+                const footer = document.getElementById('live-chat-footer');
+
+                if (form) form.style.display = 'none';
+                if (msgs) {
+                    msgs.style.display = 'block';
+                    renderMessages();
+                    const container = document.getElementById('messages-container');
+                    if (container) container.scrollTop = container.scrollHeight;
+                }
+                if (footer) footer.style.display = 'flex';
+
+                // Play simple sound but DON'T show toast bubble (duplication)
+                playNotificationSound();
             } else {
-               // Chat is closed, show toast bubble
-               showProactiveBubble(data.message, data.agent_name, data.agent_avatar);
-               playNotificationSound();
+                // Chat is closed, show toast bubble
+                showProactiveBubble(data.message, data.agent_name, data.agent_avatar);
+                playNotificationSound();
             }
         });
-        
+
         console.log('Subscribed to visitor channel:', config.visitorKey);
     }
-    
+
     // Show proactive message bubble
     function showProactiveBubble(message, agentName, agentAvatar) {
         const bubble = document.getElementById('proactive-bubble');
         const avatarEl = document.getElementById('proactive-avatar');
         const nameEl = document.getElementById('proactive-agent-name');
         const textEl = document.getElementById('proactive-message-text');
-        
+
         if (!bubble) return;
-        
+
         // Set content
         if (agentAvatar) {
             avatarEl.innerHTML = `<img src="${agentAvatar}" alt="${agentName}">`;
@@ -1844,35 +1845,35 @@
         }
         nameEl.textContent = agentName;
         textEl.textContent = message;
-        
+
         // Show bubble
         bubble.style.display = 'block';
-        
+
         // Play notification sound
         playNotificationSound();
         showUnreadBadge();
-        
+
         // Click bubble to open chat
-        bubble.onclick = function(e) {
+        bubble.onclick = function (e) {
             if (e.target.classList.contains('proactive-close')) return;
             bubble.style.display = 'none';
             state.isOpen = true;
             document.getElementById('live-chat-window').classList.add('open');
             hideUnreadBadge();
-            
+
             // Show messages if any exist (proactive)
             if (state.messages.length > 0) {
-                 document.getElementById('live-chat-details-form').style.display = 'none';
-                 document.getElementById('live-chat-messages').style.display = 'block';
-                 document.getElementById('live-chat-footer').style.display = 'flex';
-                 renderMessages();
-                 setTimeout(() => {
+                document.getElementById('live-chat-details-form').style.display = 'none';
+                document.getElementById('live-chat-messages').style.display = 'block';
+                document.getElementById('live-chat-footer').style.display = 'flex';
+                renderMessages();
+                setTimeout(() => {
                     const container = document.getElementById('messages-container');
                     if (container) container.scrollTop = container.scrollHeight;
-                 }, 50);
+                }, 50);
             }
         };
-        
+
         // Auto-hide after 30 seconds
         setTimeout(() => {
             if (bubble.style.display !== 'none') {
@@ -1880,7 +1881,7 @@
             }
         }, 30000);
     }
-    
+
     // Close proactive bubble
     function closeProactiveBubble() {
         const bubble = document.getElementById('proactive-bubble');
@@ -1892,7 +1893,7 @@
     // Public API
     window.LiveChatWidget = {
         init: init,
-        toggle: function() {
+        toggle: function () {
             state.isOpen = !state.isOpen;
             const window = document.getElementById('live-chat-window');
             const bubble = document.getElementById('proactive-bubble');
@@ -1900,7 +1901,7 @@
                 window.classList.add('open');
                 hideUnreadBadge(); // Clear unread indicator when opened
                 if (bubble) bubble.style.display = 'none'; // Hide proactive bubble when chat opens
-                
+
                 // If we have existing messages (agent-initiated chat or proactive), show them
                 if (state.messages.length > 0) {
                     document.getElementById('live-chat-details-form').style.display = 'none';
@@ -1912,9 +1913,9 @@
                         if (container) container.scrollTop = container.scrollHeight;
                     }, 50);
                 }
-                
+
                 markMessagesAsRead();
-                
+
                 // Remove toast if open
                 const toast = document.getElementById('live-chat-toast');
                 if (toast) toast.remove();
@@ -1922,25 +1923,25 @@
                 window.classList.remove('open');
             }
         },
-        minimize: function() {
+        minimize: function () {
             state.isMinimized = true;
             document.getElementById('live-chat-window').style.display = 'none';
         },
-        close: function() {
+        close: function () {
             state.isOpen = false;
             document.getElementById('live-chat-window').classList.remove('open');
         },
         sendMessage: sendMessage,
         closeProactiveBubble: closeProactiveBubble,
         markAsRead: markMessagesAsRead,
-        scrollToBottom: function() {
-             const container = document.getElementById('messages-container');
-             if (container) {
-                 container.scrollTop = container.scrollHeight;
-                 state.forceScroll = true; 
-                 const badge = document.getElementById('scroll-badge');
-                 if (badge) badge.classList.remove('visible');
-             }
+        scrollToBottom: function () {
+            const container = document.getElementById('messages-container');
+            if (container) {
+                container.scrollTop = container.scrollHeight;
+                state.forceScroll = true;
+                const badge = document.getElementById('scroll-badge');
+                if (badge) badge.classList.remove('visible');
+            }
         }
     };
 

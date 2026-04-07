@@ -22,13 +22,14 @@ const reverbScheme = document.querySelector('meta[name="reverb-scheme"]')?.conte
                      'http';
 
 if (reverbAppKey && reverbHost) {
+    const wsPort = reverbScheme === 'https' ? 443 : parseInt(reverbPort, 10);
     window.reverbClient = new Pusher(reverbAppKey, {
         wsHost: reverbHost,
-        wsPort: reverbPort,
-        wssPort: reverbPort,
+        wsPort: wsPort,
+        wssPort: wsPort,
         forceTLS: reverbScheme === 'https',
-        enabledTransports: ['ws', 'wss'],
-        cluster: 'mt1',
+        enabledTransports: reverbScheme === 'https' ? ['wss'] : ['ws', 'wss'],
+        disableStats: true,
     });
 
     console.log('Pusher client initialized');
