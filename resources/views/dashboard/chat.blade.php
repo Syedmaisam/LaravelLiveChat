@@ -330,6 +330,8 @@
             forceTLS: reverbScheme === 'https',
             enabledTransports: reverbScheme === 'https' ? ['wss'] : ['ws', 'wss'],
             disableStats: true,
+            activityTimeout: 30000,
+            pongTimeout: 6000,
             authEndpoint: '/broadcasting/auth',
             auth: {
                 headers: {
@@ -352,7 +354,7 @@
             }
         });
 
-        const chatId = '{{ $chat->uuid }}';
+        const chatId = {{ $chat->id }};
         const sessionId = {{ $chat->visitorSession?->id ?? 'null' }};
 
         // Subscribe to chat channel (public)

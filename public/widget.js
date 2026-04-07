@@ -50,14 +50,13 @@
         ];
     }
     function loadPusherLibrary(callback) {
-        if (window.Pusher) {
-            callback();
-            return;
-        }
         const script = document.createElement('script');
-        script.src = config.apiUrl.replace('/api', '') + '/pusher.min.js';
+        script.src = config.apiUrl.replace('/api', '') + '/pusher.min.js?v=8.4.0';
         script.onload = callback;
-        script.onerror = () => console.error('Failed to load Pusher library');
+        script.onerror = () => {
+            console.error('Failed to load Pusher library');
+            callback();
+        };
         document.head.appendChild(script);
     }
 
@@ -98,23 +97,24 @@
                 // Create widget HTML
                 createWidget();
 
-                // Track initial page visit
-                trackPage();
-
                 // Listen for page changes
                 trackPageChanges();
 
-                // Load Pusher first, then load saved details (which may init WebSocket)
+                // Load Pusher first, then track page to confirm visitor key, then init WebSocket
                 loadPusherLibrary(() => {
                     console.log('Pusher library loaded');
-                    // Now load saved visitor details (may call initChatWebSocket)
+                    // Load saved visitor details immediately (uses localStorage, no network)
                     loadSavedVisitorDetails();
-                    // Check if agent initiated a chat before visitor filled form
-                    checkExistingChat();
-                    // Also init WebSocket for general listening
-                    initWebSocket();
-                    // Subscribe to visitor channel for proactive messages
-                    subscribeToVisitorChannel();
+                    // Track page visit first — server confirms/assigns the stable visitor key,
+                    // then subscribe to channels using the confirmed key
+                    trackPage(() => {
+                        // Check if agent initiated a chat before visitor filled form
+                        checkExistingChat();
+                        // Keep polling for agent-initiated chats until visitor has one
+                        watchForAgentChat();
+                        // Subscribe to visitor channel for proactive messages
+                        subscribeToVisitorChannel();
+                    });
                 });
 
                 // Auto-open widget after delay
@@ -752,7 +752,7 @@
     }
 
     // Track page visit
-    function trackPage() {
+    function trackPage(onTracked) {
         fetch(`${config.apiUrl}/visitor/track`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -773,8 +773,12 @@
                 }
                 // Start heartbeat after session is established
                 startHeartbeat();
+                if (onTracked) onTracked();
             })
-            .catch(err => console.error('Tracking error:', err));
+            .catch(err => {
+                console.error('Tracking error:', err);
+                if (onTracked) onTracked();
+            });
     }
 
     // Track page changes
@@ -824,6 +828,43 @@
                 }
             })
             .catch(err => console.log('Check existing chat error:', err));
+    }
+
+    // Keep checking for agent-initiated chats until one is found or visitor starts their own
+    function watchForAgentChat() {
+        const interval = setInterval(() => {
+            if (state.chatId) {
+                clearInterval(interval);
+                return;
+            }
+            fetch(`${config.apiUrl}/chat/check-existing?widget_key=${config.widgetKey}&visitor_key=${config.visitorKey}`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.exists && data.chat_id) {
+                        clearInterval(interval);
+                        console.log('Agent-initiated chat detected:', data.chat_id);
+                        state.chatId = data.chat_id;
+                        state.messages = data.messages || [];
+
+                        localStorage.setItem('live_chat_chat_id', data.chat_id);
+                        localStorage.setItem('live_chat_session_timestamp', Date.now().toString());
+
+                        initChatWebSocket();
+
+                        const unreadAgentMessages = state.messages.filter(m => m.sender_type === 'agent' && !m.is_read);
+                        if (unreadAgentMessages.length > 0) {
+                            showUnreadBadge(unreadAgentMessages.length);
+                            const latestMessage = unreadAgentMessages[unreadAgentMessages.length - 1];
+                            showToastNotification(
+                                latestMessage.message || 'New message',
+                                latestMessage.sender_name || 'Support Agent',
+                                latestMessage.sender_avatar || null
+                            );
+                        }
+                    }
+                })
+                .catch(err => console.log('Watch for agent chat error:', err));
+        }, 3000);
     }
 
     // Initialize WebSocket
@@ -1331,6 +1372,13 @@
 
     // Initialize chat WebSocket with reconnection logic
     function initChatWebSocket() {
+        // Don't re-subscribe if already subscribed to this chat's channel
+        if (state.channel && state.subscribedChatId === state.chatId) {
+            console.log('Already subscribed to chat channel', state.chatId);
+            return;
+        }
+        state.subscribedChatId = state.chatId;
+
         // Track reconnection state
         if (!state.wsReconnectAttempts) state.wsReconnectAttempts = 0;
         const maxReconnectAttempts = 5;
@@ -1339,24 +1387,20 @@
         // Try to use Pusher if available
         if (window.Pusher && config.wsKey) {
             try {
-                // Cleanup existing connection if any
-                if (state.pusher) {
-                    try {
-                        state.pusher.disconnect();
-                    } catch (e) {
-                        console.log('Error disconnecting previous Pusher:', e);
-                    }
+                // Reuse existing connection if available, otherwise create a new one
+                if (!state.pusher) {
+                    state.pusher = new Pusher(config.wsKey, {
+                        wsHost: config.wsHost || window.location.hostname,
+                        wsPort: config.wsScheme === 'https' ? 443 : (config.wsPort || 8080),
+                        wssPort: config.wsScheme === 'https' ? 443 : (config.wsPort || 8080),
+                        forceTLS: config.wsScheme === 'https',
+                        enabledTransports: config.wsScheme === 'https' ? ['wss'] : ['ws', 'wss'],
+                        disableStats: true,
+                        activityTimeout: 30000,
+                        pongTimeout: 6000,
+                    });
                 }
-
-                const pusher = new Pusher(config.wsKey, {
-                    wsHost: config.wsHost || window.location.hostname,
-                    wsPort: config.wsScheme === 'https' ? 443 : (config.wsPort || 8080),
-                    wssPort: config.wsScheme === 'https' ? 443 : (config.wsPort || 8080),
-                    forceTLS: config.wsScheme === 'https',
-                    enabledTransports: config.wsScheme === 'https' ? ['wss'] : ['ws', 'wss'],
-                    disableStats: true,
-                    cluster: 'mt1'
-                });
+                const pusher = state.pusher;
 
                 // Handle connection state changes
                 pusher.connection.bind('connected', function () {
@@ -1720,7 +1764,8 @@
     function setCookie(name, value, days) {
         const date = new Date();
         date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
-        document.cookie = `${name}=${value};expires=${date.toUTCString()};path=/`;
+        const secure = location.protocol === 'https:' ? ';Secure;SameSite=Lax' : '';
+        document.cookie = `${name}=${value};expires=${date.toUTCString()};path=/${secure}`;
     }
 
     function generateUUID() {
@@ -1764,7 +1809,8 @@
                 forceTLS: config.wsScheme === 'https',
                 enabledTransports: config.wsScheme === 'https' ? ['wss'] : ['ws', 'wss'],
                 disableStats: true,
-                cluster: 'mt1',
+                activityTimeout: 30000,
+                pongTimeout: 6000,
             });
         }
 

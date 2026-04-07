@@ -30,6 +30,8 @@ if (reverbAppKey && reverbHost) {
         forceTLS: reverbScheme === 'https',
         enabledTransports: reverbScheme === 'https' ? ['wss'] : ['ws', 'wss'],
         disableStats: true,
+        activityTimeout: 30000,
+        pongTimeout: 6000,
     });
 
     console.log('Pusher client initialized');
