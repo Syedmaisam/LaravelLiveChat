@@ -1350,11 +1350,12 @@
                 
                 const pusher = new Pusher(config.wsKey, {
                     wsHost: config.wsHost || window.location.hostname,
-                    wsPort: config.wsScheme === 'https' ? 443 : (config.wsPort || 8080),
-                    wssPort: config.wsScheme === 'https' ? 443 : (config.wsPort || 8080),
+                    wsPort: config.wsPort || 8080,
+                    wssPort: config.wsPort || 8080,
                     forceTLS: config.wsScheme === 'https',
-                    enabledTransports: config.wsScheme === 'https' ? ['wss'] : ['ws', 'wss'],
+                    enabledTransports: ['ws', 'wss'],
                     disableStats: true,
+                    cluster: 'mt1'
                 });
                 
                 // Handle connection state changes
